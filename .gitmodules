@@ -1,0 +1,15 @@
+[submodule "ext/entt"]
+	path = ext/entt
+	url = https://github.com/skypjack/entt.git
+[submodule "ext/rapidjson"]
+	path = ext/rapidjson
+	url = https://github.com/Tencent/rapidjson.git
+[submodule "ext/rl3d"]
+	path = ext/rl3d
+	url = https://github.com/tacoEngine/rl3d.git
+[submodule "ext/yal"]
+	path = ext/yal
+	url = https://github.com/Not-Nik/yal
+[submodule "ext/JoltPhysics"]
+	path = ext/JoltPhysics
+	url = https://github.com/jrouwe/JoltPhysics

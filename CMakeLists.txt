@@ -1,0 +1,22 @@
+cmake_minimum_required(VERSION 3.29)
+project(tacoEngine)
+
+set(CMAKE_CXX_STANDARD 20)
+
+add_subdirectory(ext/entt)
+add_subdirectory(ext/JoltPhysics/Build)
+add_subdirectory(ext/rapidjson)
+add_subdirectory(ext/rl3d)
+add_subdirectory(ext/yal)
+
+set(TACO_SOURCES
+        src/taco/Engine.cpp
+        src/taco/Engine.h
+        src/taco/Camera.h
+        src/taco/Transform.h
+)
+
+add_library(tacoEngine ${TACO_SOURCES})
+
+target_link_libraries(tacoEngine EnTT::EnTT rl3d yal Jolt)
+target_include_directories(tacoEngine PUBLIC src)
