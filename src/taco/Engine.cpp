@@ -42,8 +42,27 @@ void Engine::Run() {
 void Engine::Update(double delta_time) {}
 
 void Engine::Render() {
+    auto camera_view = registry.view<const Transform, const Camera>();
+
     BeginDrawing();
     ClearBackground(BLACK);
+
+    for (auto [_, transform, cam] : camera_view.each()) {
+        Vector3 camera_target = transform.position + Vector3RotateByQuaternion(Vector3 {0, 0, -1}, transform.rotation);
+        Camera3D raylib_camera = {transform.position, camera_target, {0, 1, 0}, cam.fov, CAMERA_PERSPECTIVE};
+
+        BeginMode3D(raylib_camera);
+
+        auto model_view = registry.view<const Transform, const Mesh, const Material>();
+
+        for (auto [_, transform, mesh, material] : model_view.each()) {
+            Matrix mat_translate = MatrixTranslate(transform.position.x, transform.position.y, transform.position.z);
+            Matrix mat_rotate = QuaternionToMatrix(transform.rotation);
+            DrawMesh(mesh, material, MatrixMultiply(mat_translate, mat_rotate));
+        }
+
+        EndMode3D();
+    }
 
     EndDrawing();
 
