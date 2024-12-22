@@ -15,6 +15,10 @@ set(TACO_SOURCES
         src/taco/Camera.h
         src/taco/Transform.h
         src/taco/Graphics.h
+        src/taco/Log.cpp
+        src/taco/Log.h
+        src/taco/Physics.h
+        src/taco/Physics.cpp
 )
 
 add_library(tacoEngine ${TACO_SOURCES})

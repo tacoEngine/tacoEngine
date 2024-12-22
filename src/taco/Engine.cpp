@@ -39,7 +39,9 @@ void Engine::Run() {
     }
 }
 
-void Engine::Update(double delta_time) {}
+void Engine::Update(double delta_time) {
+    physics_.Update(delta_time);
+}
 
 void Engine::Render() {
     auto camera_view = registry.view<const Transform, const Camera>();

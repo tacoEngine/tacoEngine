@@ -4,12 +4,14 @@
 #define ENGINE_H
 
 #include <entt/entt.hpp>
-#include <Jolt/Jolt.h>
+
+#include "Physics.h"
 
 namespace taco {
 
 class Engine {
     bool running_ = false;
+    PhysicsEngine physics_;
 public:
     entt::registry registry;
 
