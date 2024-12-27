@@ -3,10 +3,14 @@
 #ifndef PHYSICS_H
 #define PHYSICS_H
 
+#include <memory>
+
 #include <Jolt/Jolt.h>
 #include <Jolt/Physics/Collision/ObjectLayer.h>
 #include <Jolt/Physics/Collision/BroadPhase/BroadPhaseLayer.h>
 #include <Jolt/Physics/PhysicsSystem.h>
+
+#include "raylib.h"
 
 namespace taco {
 // Layer that objects can be in, determines which other objects it can collide with
@@ -96,17 +100,43 @@ public:
     }
 };
 
-class PhysicsEngine {
+class Collider;
+
+class PhysicsEngine : public std::enable_shared_from_this<PhysicsEngine> {
+    friend class Engine;
+    friend class Collider;
+
     JPH::PhysicsSystem system_;
+    JPH::BodyInterface &body_interface_;
+
     std::unique_ptr<JPH::TempAllocator> temp_alloc_;
     std::unique_ptr<JPH::JobSystem> job_system_;
     BPLayerInterfaceImpl broad_phase_layer_interface_;
     ObjectVsBroadPhaseLayerFilterImpl object_vs_broadphase_layer_filter_;
     ObjectLayerPairFilterImpl object_vs_object_layer_filter_;
+
+    std::shared_ptr<PhysicsEngine> self_;
+
 public:
     PhysicsEngine();
 
     void Update(double delta_time);
+
+    Collider CreateSphereCollider(double radius);
+};
+
+class Collider {
+    JPH::BodyID body_id_;
+    std::shared_ptr<PhysicsEngine> physics_;
+
+public:
+    Collider(std::shared_ptr<PhysicsEngine> physics, JPH::BodyID body_id);
+
+    void SetPosition(Vector3 position);
+    Vector3 GetPosition() const;
+
+    void SetRotation(Quaternion position);
+    Quaternion GetRotation() const;
 };
 }
 

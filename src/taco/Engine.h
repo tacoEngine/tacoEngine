@@ -11,13 +11,15 @@ namespace taco {
 
 class Engine {
     bool running_ = false;
-    PhysicsEngine physics_;
+    std::shared_ptr<PhysicsEngine> physics_;
 public:
     entt::registry registry;
 
     Engine();
 
     void Run();
+
+    std::shared_ptr<PhysicsEngine> GetPhysics() const;
 private:
     void Update(double delta_time);
     void Render();

@@ -2,17 +2,48 @@
 
 #include "Physics.h"
 
-#include <Jolt/RegisterTypes.h>
 #include <Jolt/Core/JobSystemThreadPool.h>
+#include <Jolt/Physics/Body/BodyCreationSettings.h>
+#include <Jolt/Physics/Collision/Shape/SphereShape.h>
+#include <Jolt/RegisterTypes.h>
+
+#include <utility>
+#include <log/log.h>
 
 #include "Log.h"
 
-taco::PhysicsEngine::PhysicsEngine() : temp_alloc_(new JPH::TempAllocatorImplWithMallocFallback(10 * 1024 * 1024)),
-                                       job_system_(new JPH::JobSystemThreadPool(JPH::cMaxPhysicsJobs,
-                                           JPH::cMaxPhysicsBarriers,
-                                           std::thread::hardware_concurrency() - 1)) {
+taco::Collider::Collider(std::shared_ptr<PhysicsEngine> physics, JPH::BodyID body_id) : body_id_(body_id),
+    physics_(std::move(physics)) {}
+
+void taco::Collider::SetPosition(Vector3 position) {
+    JPH::RVec3 pos(position.x, position.y, position.z);
+    physics_->body_interface_.SetPosition(body_id_, pos, JPH::EActivation::DontActivate);
+}
+
+Vector3 taco::Collider::GetPosition() const {
+    JPH::RVec3 pos = physics_->body_interface_.GetPosition(body_id_);
+    return {pos.GetX(), pos.GetY(), pos.GetZ()};
+}
+
+void taco::Collider::SetRotation(Quaternion rotation) {
+    JPH::QuatArg rot(rotation.x, rotation.y, rotation.z, rotation.w);
+    physics_->body_interface_.SetRotation(body_id_, rot, JPH::EActivation::DontActivate);
+}
+
+Quaternion taco::Collider::GetRotation() const {
+    JPH::Quat rot = physics_->body_interface_.GetRotation(body_id_);
+
+    return {rot.GetX(), rot.GetY(), rot.GetZ(), rot.GetW()};
+}
+
+taco::PhysicsEngine::PhysicsEngine() : body_interface_(system_.GetBodyInterface()) {
     // Startup physics
     JPH::RegisterDefaultAllocator();
+
+    temp_alloc_ = std::make_unique<JPH::TempAllocatorImplWithMallocFallback>(10 * 1024 * 1024);
+    job_system_ = std::make_unique<JPH::JobSystemThreadPool>(JPH::cMaxPhysicsJobs,
+                                                             JPH::cMaxPhysicsBarriers,
+                                                             std::thread::hardware_concurrency() - 1);
 
     JPH::Trace = TraceImpl;
     JPH_IF_ENABLE_ASSERTS(JPH::AssertFailed = AssertFailedImpl;)
@@ -31,6 +62,17 @@ taco::PhysicsEngine::PhysicsEngine() : temp_alloc_(new JPH::TempAllocatorImplWit
 }
 
 void taco::PhysicsEngine::Update(double delta_time) {
-    system_.Update(delta_time, 1, temp_alloc_.get(), job_system_.get());
+    int steps = std::ceil((1./60.) / delta_time);
+    system_.Update(delta_time, steps, temp_alloc_.get(), job_system_.get());
 }
 
+taco::Collider taco::PhysicsEngine::CreateSphereCollider(double radius) {
+    JPH::BodyCreationSettings sphere_settings(new JPH::SphereShape(radius),
+                                              JPH::RVec3(0.0, 0.0, 0.0),
+                                              JPH::Quat::sIdentity(),
+                                              JPH::EMotionType::Dynamic,
+                                              Layers::MOVING);
+    JPH::BodyID sphere_id = body_interface_.CreateAndAddBody(sphere_settings, JPH::EActivation::Activate);
+
+    return Collider(shared_from_this(), sphere_id);
+}

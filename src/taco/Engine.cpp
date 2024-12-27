@@ -23,6 +23,8 @@ Engine::Engine() {
 #if !defined(NDEBUG)
     SetTargetFPS(60);
 #endif
+
+    physics_ = std::make_shared<PhysicsEngine>();
 }
 
 void Engine::Run() {
@@ -31,16 +33,30 @@ void Engine::Run() {
     double last_time = GetTime();
 
     while (running_) {
+        Render();
+
         double current_time = GetTime();
         double delta_time = current_time - last_time;
+        last_time = current_time;
 
         Update(delta_time);
-        Render();
     }
 }
 
 void Engine::Update(double delta_time) {
-    physics_.Update(delta_time);
+    auto collider_view = registry.view<Collider, Transform>();
+
+    for (auto [_, collider, transform] : collider_view.each()) {
+        collider.SetPosition(transform.position);
+        collider.SetRotation(transform.rotation);
+    }
+
+    physics_->Update(delta_time);
+
+    for (auto [_, collider, transform] : collider_view.each()) {
+        transform.position = collider.GetPosition();
+        transform.rotation = collider.GetRotation();
+    }
 }
 
 void Engine::Render() {
@@ -69,5 +85,9 @@ void Engine::Render() {
     EndDrawing();
 
     running_ = !WindowShouldClose();
+}
+
+std::shared_ptr<PhysicsEngine> Engine::GetPhysics() const {
+    return physics_;
 }
 } // taco
