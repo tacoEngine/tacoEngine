@@ -123,20 +123,26 @@ public:
     void Update(double delta_time);
 
     Collider CreateSphereCollider(double radius);
+    Collider CreateMeshCollider(Mesh mesh, bool dynamic = true);
 };
 
 class Collider {
+    friend class PhysicsEngine;
+
     JPH::BodyID body_id_;
     std::shared_ptr<PhysicsEngine> physics_;
+    Vector3 com_;
 
+    Collider(std::shared_ptr<PhysicsEngine> physics, JPH::BodyID body_id, Vector3 com);
 public:
-    Collider(std::shared_ptr<PhysicsEngine> physics, JPH::BodyID body_id);
 
     void SetPosition(Vector3 position);
     Vector3 GetPosition() const;
 
     void SetRotation(Quaternion position);
     Quaternion GetRotation() const;
+
+    Vector3 GetCenterOfMass() const;
 };
 }
 

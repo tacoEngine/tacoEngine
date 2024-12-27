@@ -13,7 +13,9 @@
 
 namespace taco {
 Engine::Engine() {
+#if defined(NDEBUG)
     ChangeDirectory(GetApplicationDirectory());
+#endif
 
     SetConfigFlags(FLAG_WINDOW_HIGHDPI | FLAG_WINDOW_UNDECORATED | FLAG_WINDOW_MAXIMIZED);
     InitWindow(0, 0, "taco");

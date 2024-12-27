@@ -11,9 +11,11 @@
 #include <log/log.h>
 
 #include "Log.h"
+#include "raymath.h"
+#include "Jolt/Physics/Collision/Shape/ConvexHullShape.h"
 
-taco::Collider::Collider(std::shared_ptr<PhysicsEngine> physics, JPH::BodyID body_id) : body_id_(body_id),
-    physics_(std::move(physics)) {}
+taco::Collider::Collider(std::shared_ptr<PhysicsEngine> physics, JPH::BodyID body_id, Vector3 com) : body_id_(body_id),
+    physics_(std::move(physics)), com_(com) {}
 
 void taco::Collider::SetPosition(Vector3 position) {
     JPH::RVec3 pos(position.x, position.y, position.z);
@@ -34,6 +36,10 @@ Quaternion taco::Collider::GetRotation() const {
     JPH::Quat rot = physics_->body_interface_.GetRotation(body_id_);
 
     return {rot.GetX(), rot.GetY(), rot.GetZ(), rot.GetW()};
+}
+
+Vector3 taco::Collider::GetCenterOfMass() const {
+    return com_;
 }
 
 taco::PhysicsEngine::PhysicsEngine() : body_interface_(system_.GetBodyInterface()) {
@@ -62,8 +68,9 @@ taco::PhysicsEngine::PhysicsEngine() : body_interface_(system_.GetBodyInterface(
 }
 
 void taco::PhysicsEngine::Update(double delta_time) {
-    int steps = std::ceil((1./60.) / delta_time);
+    int steps = std::ceil((1. / 60.) / delta_time);
     system_.Update(delta_time, steps, temp_alloc_.get(), job_system_.get());
+
 }
 
 taco::Collider taco::PhysicsEngine::CreateSphereCollider(double radius) {
@@ -74,5 +81,42 @@ taco::Collider taco::PhysicsEngine::CreateSphereCollider(double radius) {
                                               Layers::MOVING);
     JPH::BodyID sphere_id = body_interface_.CreateAndAddBody(sphere_settings, JPH::EActivation::Activate);
 
-    return Collider(shared_from_this(), sphere_id);
+    return Collider(shared_from_this(), sphere_id, Vector3Zero());
+}
+
+taco::Collider taco::PhysicsEngine::CreateMeshCollider(Mesh mesh, bool dynamic) {
+    JPH::ConvexHullShapeSettings settings;
+
+    if (mesh.indices) {
+        JPH::Array<JPH::Vec3> points;
+        points.reserve(mesh.triangleCount * 3);
+
+        for (int i = 0; i < mesh.triangleCount * 3; i++) {
+            int index = mesh.indices[i];
+            points.emplace_back(mesh.vertices[index * 3], mesh.vertices[index * 3 + 1], mesh.vertices[index * 3 + 2]);
+        }
+        // Construct the settings into the stack var, because there is neither a copy nor a move assignment operator
+        new(&settings) JPH::ConvexHullShapeSettings(points);
+    }
+    else {
+        new(&settings) JPH::ConvexHullShapeSettings((JPH::Vec3 *) mesh.vertices, mesh.vertexCount);
+    }
+
+    JPH::ConvexHullShape::ShapeResult result;
+    JPH::BodyCreationSettings sphere_settings(new JPH::ConvexHullShape(settings, result),
+                                              JPH::RVec3(0.0, 0.0, 0.0),
+                                              JPH::Quat::sIdentity(),
+                                              dynamic ? JPH::EMotionType::Dynamic : JPH::EMotionType::Static,
+                                              dynamic ? Layers::MOVING : Layers::NON_MOVING);
+    JPH::BodyID mesh_id = body_interface_.CreateAndAddBody(sphere_settings, JPH::EActivation::Activate);
+
+    Vector3 center_of_mass = Vector3Zero();
+    if (!result.HasError()) {
+        auto com = result.Get()->GetCenterOfMass();
+        center_of_mass.x = com.GetX();
+        center_of_mass.y = com.GetY();
+        center_of_mass.z = com.GetZ();
+    }
+
+    return Collider(shared_from_this(), mesh_id, center_of_mass);
 }
