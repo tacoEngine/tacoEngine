@@ -10,6 +10,7 @@
 
 #include "Camera.h"
 #include "Debug.h"
+#include "rl3d_effects.h"
 #include "Transform.h"
 
 namespace taco {
@@ -20,6 +21,7 @@ Engine::Engine() {
 
     SetConfigFlags(FLAG_WINDOW_HIGHDPI | FLAG_WINDOW_UNDECORATED | FLAG_WINDOW_MAXIMIZED);
     InitWindow(0, 0, "taco");
+    Init3D();
 
     SetExitKey(0);
 
@@ -29,6 +31,8 @@ Engine::Engine() {
 
     physics_ = std::make_shared<PhysicsEngine>();
     debug_renderer_ = std::make_unique<RaylibDebugRenderer>();
+
+    ReloadGBuffers();
 }
 
 void Engine::Run() {
@@ -64,9 +68,12 @@ void Engine::Update(double delta_time) {
 }
 
 void Engine::Render() {
+    if (IsWindowResized())
+        ReloadGBuffers();
+
     auto camera_view = registry.view<const Transform, const Camera>();
 
-    BeginDrawing();
+    BeginGBufferMode(gbuffers_);
     ClearBackground(BLACK);
 
     for (auto [_, transform, cam] : camera_view.each()) {
@@ -89,9 +96,20 @@ void Engine::Render() {
         EndMode3D();
     }
 
-    EndDrawing();
+    EndGBufferMode();
+
+    ClearPresenter(presenter_);
+    ShadeFlat(presenter_);
+    Present(presenter_);
 
     running_ = !WindowShouldClose();
+}
+
+void Engine::ReloadGBuffers() {
+    //UnloadGBuffers(gbuffers_);
+    //UnloadPresenter(presenter_);
+    gbuffers_ = LoadGBuffers(GetScreenWidth(), GetScreenHeight());
+    presenter_ = LoadPresenter(gbuffers_);
 }
 
 std::shared_ptr<PhysicsEngine> Engine::GetPhysics() const {

@@ -8,6 +8,7 @@
 #include "Config.h"
 #include "Debug.h"
 #include "Physics.h"
+#include "rl3d.h"
 
 namespace taco {
 
@@ -16,6 +17,9 @@ class Engine {
     std::shared_ptr<PhysicsEngine> physics_;
     std::unique_ptr<RaylibDebugRenderer> debug_renderer_;
     Config config_;
+
+    GBuffers gbuffers_;
+    GBufferPresenter presenter_;
 public:
     entt::registry registry;
 
@@ -28,6 +32,8 @@ public:
 private:
     void Update(double delta_time);
     void Render();
+
+    void ReloadGBuffers();
 };
 
 } // taco
