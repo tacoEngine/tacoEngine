@@ -5,6 +5,7 @@
 
 #include <entt/entt.hpp>
 
+#include "Debug.h"
 #include "Physics.h"
 
 namespace taco {
@@ -12,6 +13,7 @@ namespace taco {
 class Engine {
     bool running_ = false;
     std::shared_ptr<PhysicsEngine> physics_;
+    std::unique_ptr<RaylibDebugRenderer> debug_renderer_;
 public:
     entt::registry registry;
 

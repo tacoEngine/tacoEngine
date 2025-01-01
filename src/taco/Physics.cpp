@@ -73,6 +73,10 @@ void taco::PhysicsEngine::Update(double delta_time) {
 
 }
 
+void taco::PhysicsEngine::Render() {
+    system_.DrawBodies(JPH::BodyManager::DrawSettings{}, JPH::DebugRenderer::sInstance);
+}
+
 taco::Collider taco::PhysicsEngine::CreateSphereCollider(double radius) {
     JPH::BodyCreationSettings sphere_settings(new JPH::SphereShape(radius),
                                               JPH::RVec3(0.0, 0.0, 0.0),

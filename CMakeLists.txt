@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.29)
 project(tacoEngine)
 
 set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_FLAGS -fno-rtti)
 
 add_subdirectory(ext/entt)
 add_subdirectory(ext/JoltPhysics/Build)
@@ -19,6 +20,8 @@ set(TACO_SOURCES
         src/taco/Log.h
         src/taco/Physics.h
         src/taco/Physics.cpp
+        src/taco/Debug.cpp
+        src/taco/Debug.h
 )
 
 add_library(tacoEngine ${TACO_SOURCES})

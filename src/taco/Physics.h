@@ -121,6 +121,7 @@ public:
     PhysicsEngine();
 
     void Update(double delta_time);
+    void Render();
 
     Collider CreateSphereCollider(double radius);
     Collider CreateMeshCollider(Mesh mesh, bool dynamic = true);

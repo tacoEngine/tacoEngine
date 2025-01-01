@@ -9,6 +9,7 @@
 #include <raymath.h>
 
 #include "Camera.h"
+#include "Debug.h"
 #include "Transform.h"
 
 namespace taco {
@@ -27,6 +28,7 @@ Engine::Engine() {
 #endif
 
     physics_ = std::make_shared<PhysicsEngine>();
+    debug_renderer_ = std::make_unique<RaylibDebugRenderer>();
 }
 
 void Engine::Run() {
@@ -80,6 +82,8 @@ void Engine::Render() {
             Matrix mat_rotate = QuaternionToMatrix(transform.rotation);
             DrawMesh(mesh, material, MatrixMultiply(mat_rotate, mat_translate));
         }
+
+        physics_->Render();
 
         EndMode3D();
     }
