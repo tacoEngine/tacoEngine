@@ -5,6 +5,7 @@
 
 #include <entt/entt.hpp>
 
+#include "Config.h"
 #include "Debug.h"
 #include "Physics.h"
 
@@ -14,6 +15,7 @@ class Engine {
     bool running_ = false;
     std::shared_ptr<PhysicsEngine> physics_;
     std::unique_ptr<RaylibDebugRenderer> debug_renderer_;
+    Config config_;
 public:
     entt::registry registry;
 
@@ -22,6 +24,7 @@ public:
     void Run();
 
     std::shared_ptr<PhysicsEngine> GetPhysics() const;
+    Config SwapConfig(Config con);
 private:
     void Update(double delta_time);
     void Render();

@@ -22,6 +22,8 @@ set(TACO_SOURCES
         src/taco/Physics.cpp
         src/taco/Debug.cpp
         src/taco/Debug.h
+        src/taco/Config.h
+        src/taco/Lights.h
 )
 
 add_library(tacoEngine ${TACO_SOURCES})

@@ -83,7 +83,8 @@ void Engine::Render() {
             DrawMesh(mesh, material, MatrixMultiply(mat_rotate, mat_translate));
         }
 
-        physics_->Render();
+        if (config_.debug_physics)
+            physics_->Render();
 
         EndMode3D();
     }
@@ -95,5 +96,10 @@ void Engine::Render() {
 
 std::shared_ptr<PhysicsEngine> Engine::GetPhysics() const {
     return physics_;
+}
+
+Config Engine::SwapConfig(Config con) {
+    std::swap(con, config_);
+    return con;
 }
 } // taco
