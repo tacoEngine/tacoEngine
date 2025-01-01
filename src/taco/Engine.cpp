@@ -78,7 +78,7 @@ void Engine::Render() {
         for (auto [_, transform, mesh, material] : model_view.each()) {
             Matrix mat_translate = MatrixTranslate(transform.position.x, transform.position.y, transform.position.z);
             Matrix mat_rotate = QuaternionToMatrix(transform.rotation);
-            DrawMesh(mesh, material, MatrixMultiply(mat_translate, mat_rotate));
+            DrawMesh(mesh, material, MatrixMultiply(mat_rotate, mat_translate));
         }
 
         EndMode3D();
