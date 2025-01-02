@@ -10,6 +10,7 @@
 
 #include "Camera.h"
 #include "Debug.h"
+#include "Lights.h"
 #include "rl3d_effects.h"
 #include "Transform.h"
 
@@ -76,17 +77,20 @@ void Engine::Render() {
     BeginGBufferMode(gbuffers_);
     ClearBackground(BLACK);
 
+    Camera3D raylib_camera = {};
+
     for (auto [_, transform, cam] : camera_view.each()) {
         Vector3 camera_target = transform.position + Vector3RotateByQuaternion(Vector3 {0, 0, -1}, transform.rotation);
-        Camera3D raylib_camera = {transform.position, camera_target, {0, 1, 0}, cam.fov, CAMERA_PERSPECTIVE};
+        raylib_camera = {transform.position, camera_target, {0, 1, 0}, cam.fov, CAMERA_PERSPECTIVE};
 
         BeginMode3D(raylib_camera);
 
-        auto model_view = registry.view<const Transform, const Mesh, const Material>();
+        auto model_view = registry.view<const Transform, const Mesh, Material>();
 
         for (auto [_, transform, mesh, material] : model_view.each()) {
             Matrix mat_translate = MatrixTranslate(transform.position.x, transform.position.y, transform.position.z);
             Matrix mat_rotate = QuaternionToMatrix(transform.rotation);
+            material.shader = GetGBufferShader();
             DrawMesh(mesh, material, MatrixMultiply(mat_rotate, mat_translate));
         }
 
@@ -96,10 +100,25 @@ void Engine::Render() {
         EndMode3D();
     }
 
+    auto sun_view = registry.view<const Transform, const Sunlight>();
+
     EndGBufferMode();
 
     ClearPresenter(presenter_);
-    ShadeFlat(presenter_);
+
+    BeginLightingPass(presenter_);
+
+    for (auto [_, transform, sun] : sun_view.each()) {
+        LightSun(presenter_,
+                 raylib_camera,
+                 Vector3RotateByQuaternion(Vector3 {0, 0, -1}, transform.rotation),
+                 sun.intensity,
+                 sun.color,
+                 NULL_SHADOW_MAP);
+    }
+
+    EndLightingPass();
+
     Present(presenter_);
 
     running_ = !WindowShouldClose();
