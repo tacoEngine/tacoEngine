@@ -119,6 +119,9 @@ void Engine::Render() {
 
     EndLightingPass();
 
+    ApplyToneMapping(presenter_, config_.tone_mapper);
+    ApplyGammaCorrection(presenter_, config_.gamma_correction);
+
     Present(presenter_);
 
     running_ = !WindowShouldClose();

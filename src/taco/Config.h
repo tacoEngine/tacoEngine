@@ -3,9 +3,13 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
+#include <rl3d_effects.h>
+
 namespace taco {
 struct Config {
     bool debug_physics = false;
+    float gamma_correction = 2.2f;
+    ToneMapper tone_mapper;
 };
 };
 
