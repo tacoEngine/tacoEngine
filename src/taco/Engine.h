@@ -9,6 +9,7 @@
 #include "Debug.h"
 #include "Physics.h"
 #include "rl3d.h"
+#include "Transform.h"
 
 namespace taco {
 
@@ -32,6 +33,7 @@ public:
 private:
     void Update(double delta_time);
     void Render();
+    void DrawAllMeshes(const decltype(registry.view<const Transform, const Mesh, Material>()) &model_view);
 
     void ReloadGBuffers();
 };

@@ -12,7 +12,6 @@
 #include "Debug.h"
 #include "Lights.h"
 #include "rl3d_effects.h"
-#include "Transform.h"
 
 namespace taco {
 Engine::Engine() {
@@ -68,11 +67,15 @@ void Engine::Update(double delta_time) {
     }
 }
 
+// entt::basic_view<entt::get_t<const entt::basic_sigh_mixin<entt::basic_storage<Transform>, entt::basic_registry<>>, const entt::basic_sigh_mixin<entt::basic_storage<Mesh>, entt::basic_registry<>>, entt::basic_sigh_mixin<entt::basic_storage<Material>, entt::basic_registry<>>>, entt::exclude_t<>>
+// entt::basic_view<entt::get_t<const entt::basic_sigh_mixin<entt::basic_storage<::Transform>, entt::basic_registry<>>, const entt::basic_sigh_mixin<entt::basic_storage<Mesh>, entt::basic_registry<>>, entt::basic_sigh_mixin<entt::basic_storage<Material>, entt::basic_registry<>>>, entt::exclude_t<>>
+
 void Engine::Render() {
     if (IsWindowResized())
         ReloadGBuffers();
 
     auto camera_view = registry.view<const Transform, const Camera>();
+    auto model_view = registry.view<const Transform, const Mesh, Material>();
 
     BeginGBufferMode(gbuffers_);
     ClearBackground(BLACK);
@@ -85,14 +88,7 @@ void Engine::Render() {
 
         BeginMode3D(raylib_camera);
 
-        auto model_view = registry.view<const Transform, const Mesh, Material>();
-
-        for (auto [_, transform, mesh, material] : model_view.each()) {
-            Matrix mat_translate = MatrixTranslate(transform.position.x, transform.position.y, transform.position.z);
-            Matrix mat_rotate = QuaternionToMatrix(transform.rotation);
-            material.shader = GetGBufferShader();
-            DrawMesh(mesh, material, MatrixMultiply(mat_rotate, mat_translate));
-        }
+        DrawAllMeshes(model_view);
 
         if (config_.debug_physics)
             physics_->Render();
@@ -100,9 +96,28 @@ void Engine::Render() {
         EndMode3D();
     }
 
-    auto sun_view = registry.view<const Transform, const Sunlight>();
-
     EndGBufferMode();
+
+    auto sun_view = registry.view<const Transform, Sunlight>();
+
+    for (auto [_, transform, sun] : sun_view.each()) {
+        const int cascadeCount = 3;
+        if (sun.shadow_map_.size != config_.shadow_map_size) {
+            UnloadShadowMap(sun.shadow_map_);
+            sun.shadow_map_ = LoadShadowMap(config_.shadow_map_size, cascadeCount, config_.cascade_dist);
+        }
+
+        for (int i = 0; i < cascadeCount; i++) {
+            Vector3 direction = Vector3RotateByQuaternion(Vector3 {0, 0, -1}, transform.rotation);
+            BeginShadowMap(sun.shadow_map_, raylib_camera, direction, i);
+
+            ClearBackground(BLANK);
+
+            DrawAllMeshes(model_view);
+
+            EndShadowMap();
+        }
+    }
 
     ClearPresenter(presenter_);
 
@@ -114,7 +129,7 @@ void Engine::Render() {
                  Vector3RotateByQuaternion(Vector3 {0, 0, -1}, transform.rotation),
                  sun.intensity,
                  sun.color,
-                 NULL_SHADOW_MAP);
+                 sun.shadow_map_);
     }
 
     EndLightingPass();
@@ -125,6 +140,15 @@ void Engine::Render() {
     Present(presenter_);
 
     running_ = !WindowShouldClose();
+}
+
+void Engine::DrawAllMeshes(const decltype(registry.view<const Transform, const Mesh, Material>()) &model_view) {
+    for (auto [_, transform, mesh, material] : model_view.each()) {
+        Matrix mat_translate = MatrixTranslate(transform.position.x, transform.position.y, transform.position.z);
+        Matrix mat_rotate = QuaternionToMatrix(transform.rotation);
+        material.shader = GetGBufferShader();
+        DrawMesh(mesh, material, MatrixMultiply(mat_rotate, mat_translate));
+    }
 }
 
 void Engine::ReloadGBuffers() {

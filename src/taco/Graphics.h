@@ -4,5 +4,6 @@
 #define GRAPHICS_H
 
 #include <raylib.h>
+#include <rl3d.h>
 
 #endif //GRAPHICS_H

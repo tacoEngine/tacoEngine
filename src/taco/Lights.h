@@ -7,10 +7,16 @@
 
 namespace taco {
 struct Sunlight {
+    friend class Engine;
+
     float intensity;
     Color color;
+    bool shadow_casting;
 
-    Sunlight(float inten = 1.f, Color col = WHITE) : intensity(inten), color(col) {}
+    Sunlight(float inten = 1.f, Color col = WHITE, bool sh = true) : intensity(inten), color(col), shadow_casting(sh) {}
+
+private:
+    ShadowMap shadow_map_ = {0};
 };
 };
 

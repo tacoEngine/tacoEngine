@@ -10,6 +10,8 @@ struct Config {
     bool debug_physics = false;
     float gamma_correction = 2.2f;
     ToneMapper tone_mapper;
+    unsigned int shadow_map_size = 1024;
+    float cascade_dist = 100.f;
 };
 };
 
