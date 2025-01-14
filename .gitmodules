@@ -5,8 +5,8 @@
 	path = ext/rapidjson
 	url = https://github.com/Tencent/rapidjson.git
 [submodule "ext/rl3d"]
-	path = ext/rl3d
-	url = https://github.com/tacoEngine/rl3d.git
+	path = ext/tacoRender
+	url = https://github.com/tacoEngine/tacoRender.git
 [submodule "ext/yal"]
 	path = ext/yal
 	url = https://github.com/Not-Nik/yal

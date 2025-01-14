@@ -7,7 +7,7 @@ set(CMAKE_CXX_FLAGS -fno-rtti)
 add_subdirectory(ext/entt)
 add_subdirectory(ext/JoltPhysics/Build)
 add_subdirectory(ext/rapidjson)
-add_subdirectory(ext/rl3d)
+add_subdirectory(ext/tacoRender)
 add_subdirectory(ext/yal)
 
 set(TACO_SOURCES
@@ -28,5 +28,5 @@ set(TACO_SOURCES
 
 add_library(tacoEngine ${TACO_SOURCES})
 
-target_link_libraries(tacoEngine EnTT::EnTT rl3d yal Jolt)
+target_link_libraries(tacoEngine EnTT::EnTT tacoRender yal Jolt)
 target_include_directories(tacoEngine PUBLIC src)

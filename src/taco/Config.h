@@ -3,7 +3,7 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-#include <rl3d_effects.h>
+#include <tr_effects.h>
 
 namespace taco {
 struct Config {

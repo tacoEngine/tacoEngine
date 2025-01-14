@@ -11,7 +11,7 @@
 #include "Camera.h"
 #include "Debug.h"
 #include "Lights.h"
-#include "rl3d_effects.h"
+#include "tr_effects.h"
 
 namespace taco {
 Engine::Engine() {
