@@ -88,7 +88,7 @@ void Engine::Render() {
 
         BeginMode3D(raylib_camera);
 
-        DrawAllMeshes(model_view);
+        DrawAllMeshes(model_view, GetGBufferShader());
 
         if (config_.debug_physics)
             physics_->Render();
@@ -117,6 +117,8 @@ void Engine::Render() {
 
             EndShadowMap();
         }
+
+        FilterShadowMap(sun.shadow_map_);
     }
 
     ClearPresenter(presenter_);
@@ -142,11 +144,11 @@ void Engine::Render() {
     running_ = !WindowShouldClose();
 }
 
-void Engine::DrawAllMeshes(const decltype(registry.view<const Transform, const Mesh, Material>()) &model_view) {
+void Engine::DrawAllMeshes(const decltype(registry.view<const Transform, const Mesh, Material>()) &model_view, Shader shader) {
     for (auto [_, transform, mesh, material] : model_view.each()) {
         Matrix mat_translate = MatrixTranslate(transform.position.x, transform.position.y, transform.position.z);
         Matrix mat_rotate = QuaternionToMatrix(transform.rotation);
-        material.shader = GetGBufferShader();
+        material.shader = shader;
         DrawMesh(mesh, material, MatrixMultiply(mat_rotate, mat_translate));
     }
 }

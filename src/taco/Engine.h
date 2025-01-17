@@ -33,7 +33,7 @@ public:
 private:
     void Update(double delta_time);
     void Render();
-    void DrawAllMeshes(const decltype(registry.view<const Transform, const Mesh, Material>()) &model_view);
+    void DrawAllMeshes(const decltype(registry.view<const Transform, const Mesh, Material>()) &model_view, Shader shader = LoadMaterialDefault().shader);
 
     void ReloadGBuffers();
 };
