@@ -4,6 +4,8 @@
 
 #include <log/log.h>
 
+#include <cstdarg>
+
 void taco::TraceImpl(const char *inFMT, ...) {
     // Format the message
     va_list list;

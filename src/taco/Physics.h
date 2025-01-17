@@ -47,7 +47,7 @@ public:
 namespace BroadPhaseLayers {
 static constexpr JPH::BroadPhaseLayer NON_MOVING(0);
 static constexpr JPH::BroadPhaseLayer MOVING(1);
-static constexpr uint NUM_LAYERS(2);
+static constexpr JPH::uint NUM_LAYERS(2);
 };
 
 // BroadPhaseLayerInterface implementation
@@ -60,7 +60,7 @@ public:
         mObjectToBroadPhase[Layers::MOVING] = BroadPhaseLayers::MOVING;
     }
 
-    uint GetNumBroadPhaseLayers() const override {
+    JPH::uint GetNumBroadPhaseLayers() const override {
         return BroadPhaseLayers::NUM_LAYERS;
     }
 
