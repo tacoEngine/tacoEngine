@@ -4,6 +4,7 @@
 #define ENGINE_H
 
 #include <entt/entt.hpp>
+#include <entt/core/hashed_string.hpp>
 #include <tacoRender.h>
 
 #include "comp/Transform.h"
@@ -11,10 +12,14 @@
 #include "misc/Debug.h"
 #include "Physics.h"
 
+using namespace entt::literals;
+
 namespace taco {
 
 class Engine {
     bool running_ = false;
+    double delta_time_ = 0.0f;
+
     std::shared_ptr<PhysicsEngine> physics_;
     std::unique_ptr<RaylibDebugRenderer> debug_renderer_;
     Config config_;
@@ -29,6 +34,8 @@ public:
     void Run();
 
     std::shared_ptr<PhysicsEngine> GetPhysics() const;
+    double GetDeltaTime() const;
+
     Config SwapConfig(Config con);
 private:
     void Update(double delta_time);

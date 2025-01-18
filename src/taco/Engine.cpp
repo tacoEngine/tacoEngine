@@ -11,6 +11,7 @@
 
 #include "comp/Camera.h"
 #include "comp/Lights.h"
+#include "comp/System.h"
 #include "misc/Debug.h"
 
 namespace taco {
@@ -44,14 +45,28 @@ void Engine::Run() {
         Render();
 
         double current_time = GetTime();
-        double delta_time = current_time - last_time;
+        delta_time_ = current_time - last_time;
         last_time = current_time;
 
-        Update(delta_time);
+        Update(delta_time_);
     }
 }
 
 void Engine::Update(double delta_time) {
+    auto visit_systems = [&](auto func) {
+        for (auto [id, pool] : registry.storage()) {
+            if (registry.storage(id)->type() != entt::type_id<std::shared_ptr<System>>())
+                continue;
+            auto system_view = entt::basic_view{registry.storage<std::shared_ptr<System>>(id)};
+            for (auto [entity, system] : system_view.each()) {
+                func(system, entity);
+            }
+        }
+    };
+
+    visit_systems([&](std::shared_ptr<System> system, entt::entity entity) {system->UpdateEarly(this, entity);});
+    visit_systems([&](std::shared_ptr<System> system, entt::entity entity) {system->UpdatePrePhysics(this, entity);});
+
     auto collider_view = registry.view<Collider, Transform>();
 
     for (auto [_, collider, transform] : collider_view.each()) {
@@ -65,6 +80,9 @@ void Engine::Update(double delta_time) {
         transform.position = collider.GetPosition();
         transform.rotation = collider.GetRotation();
     }
+
+    visit_systems([&](std::shared_ptr<System> system, entt::entity entity) {system->UpdatePostPhysics(this, entity);});
+    visit_systems([&](std::shared_ptr<System> system, entt::entity entity) {system->UpdateLate(this, entity);});
 }
 
 void Engine::Render() {
@@ -166,6 +184,10 @@ void Engine::ReloadGBuffers() {
 
 std::shared_ptr<PhysicsEngine> Engine::GetPhysics() const {
     return physics_;
+}
+
+double Engine::GetDeltaTime() const {
+    return delta_time_;
 }
 
 Config Engine::SwapConfig(Config con) {
