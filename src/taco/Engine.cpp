@@ -67,9 +67,6 @@ void Engine::Update(double delta_time) {
     }
 }
 
-// entt::basic_view<entt::get_t<const entt::basic_sigh_mixin<entt::basic_storage<Transform>, entt::basic_registry<>>, const entt::basic_sigh_mixin<entt::basic_storage<Mesh>, entt::basic_registry<>>, entt::basic_sigh_mixin<entt::basic_storage<Material>, entt::basic_registry<>>>, entt::exclude_t<>>
-// entt::basic_view<entt::get_t<const entt::basic_sigh_mixin<entt::basic_storage<::Transform>, entt::basic_registry<>>, const entt::basic_sigh_mixin<entt::basic_storage<Mesh>, entt::basic_registry<>>, entt::basic_sigh_mixin<entt::basic_storage<Material>, entt::basic_registry<>>>, entt::exclude_t<>>
-
 void Engine::Render() {
     if (IsWindowResized())
         ReloadGBuffers();
@@ -101,6 +98,13 @@ void Engine::Render() {
     auto sun_view = registry.view<const Transform, Sunlight>();
 
     for (auto [_, transform, sun] : sun_view.each()) {
+        if (!sun.shadow_casting) {
+            if (sun.shadow_map_.fbo) {
+                UnloadShadowMap(sun.shadow_map_);
+                sun.shadow_map_.fbo = 0;
+            }
+            continue;
+        }
         const int cascadeCount = 3;
         if (sun.shadow_map_.size != config_.shadow_map_size) {
             UnloadShadowMap(sun.shadow_map_);
@@ -131,7 +135,7 @@ void Engine::Render() {
                  Vector3RotateByQuaternion(Vector3 {0, 0, -1}, transform.rotation),
                  sun.intensity,
                  sun.color,
-                 sun.shadow_map_);
+                 sun.shadow_casting ? sun.shadow_map_ : NULL_SHADOW_MAP);
     }
 
     EndLightingPass();
