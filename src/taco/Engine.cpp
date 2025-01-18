@@ -7,11 +7,11 @@
 
 #include <raylib.h>
 #include <raymath.h>
+#include <tr_effects.h>
 
-#include "Camera.h"
-#include "Debug.h"
-#include "Lights.h"
-#include "tr_effects.h"
+#include "comp/Camera.h"
+#include "comp/Lights.h"
+#include "misc/Debug.h"
 
 namespace taco {
 Engine::Engine() {

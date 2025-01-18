@@ -4,12 +4,12 @@
 #define ENGINE_H
 
 #include <entt/entt.hpp>
+#include <tacoRender.h>
 
+#include "comp/Transform.h"
 #include "Config.h"
-#include "Debug.h"
+#include "misc/Debug.h"
 #include "Physics.h"
-#include "tacoRender.h"
-#include "Transform.h"
 
 namespace taco {
 

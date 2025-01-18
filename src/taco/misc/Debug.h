@@ -4,12 +4,10 @@
 #define DEBUG_H
 
 #include <Jolt/Jolt.h>
+#include <Jolt/Renderer/DebugRendererSimple.h>
 #include <Jolt/Renderer/DebugRenderer.h>
 
 #include <string_view>
-
-
-#include "Jolt/Renderer/DebugRendererSimple.h"
 
 namespace taco {
 class RaylibDebugRenderer : public JPH::DebugRendererSimple {

@@ -3,7 +3,7 @@
 #ifndef LIGHTS_H
 #define LIGHTS_H
 
-#include "Graphics.h"
+#include "../Graphics.h"
 
 namespace taco {
 struct Sunlight {

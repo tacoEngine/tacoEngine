@@ -4,15 +4,15 @@
 
 #include <Jolt/Core/JobSystemThreadPool.h>
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
+#include <Jolt/Physics/Collision/Shape/ConvexHullShape.h>
 #include <Jolt/Physics/Collision/Shape/SphereShape.h>
 #include <Jolt/RegisterTypes.h>
 
-#include <utility>
 #include <log/log.h>
+#include <raymath.h>
+#include <utility>
 
-#include "Log.h"
-#include "raymath.h"
-#include "Jolt/Physics/Collision/Shape/ConvexHullShape.h"
+#include "misc/Log.h"
 
 taco::Collider::Collider(std::shared_ptr<PhysicsEngine> physics, JPH::BodyID body_id, Vector3 com) : body_id_(body_id),
     physics_(std::move(physics)), com_(com) {}

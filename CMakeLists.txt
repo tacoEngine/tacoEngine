@@ -11,19 +11,19 @@ add_subdirectory(ext/tacoRender)
 add_subdirectory(ext/yal)
 
 set(TACO_SOURCES
+        src/taco/comp/Camera.h
+        src/taco/comp/Lights.h
+        src/taco/comp/Transform.h
+        src/taco/misc/Debug.cpp
+        src/taco/misc/Debug.h
+        src/taco/misc/Log.cpp
+        src/taco/misc/Log.h
+        src/taco/Config.h
         src/taco/Engine.cpp
         src/taco/Engine.h
-        src/taco/Camera.h
-        src/taco/Transform.h
         src/taco/Graphics.h
-        src/taco/Log.cpp
-        src/taco/Log.h
-        src/taco/Physics.h
         src/taco/Physics.cpp
-        src/taco/Debug.cpp
-        src/taco/Debug.h
-        src/taco/Config.h
-        src/taco/Lights.h
+        src/taco/Physics.h
 )
 
 add_library(tacoEngine ${TACO_SOURCES})
