@@ -11,6 +11,7 @@
 #include <Jolt/Physics/PhysicsSystem.h>
 
 #include "raylib.h"
+#include "Jolt/Physics/Character/Character.h"
 
 namespace taco {
 // Layer that objects can be in, determines which other objects it can collide with
@@ -101,6 +102,7 @@ public:
 };
 
 class Collider;
+class Character;
 
 class PhysicsEngine : public std::enable_shared_from_this<PhysicsEngine> {
     friend class Engine;
@@ -125,6 +127,8 @@ public:
 
     Collider CreateSphereCollider(double radius);
     Collider CreateMeshCollider(Mesh mesh, bool dynamic = true);
+
+    Character CreateCharacter(double height, double radius);
 };
 
 class Collider {
@@ -144,6 +148,22 @@ public:
     Quaternion GetRotation() const;
 
     Vector3 GetCenterOfMass() const;
+};
+
+class Character {
+    friend class PhysicsEngine;
+
+    std::unique_ptr<JPH::Character> character_;
+    std::shared_ptr<PhysicsEngine> physics_;
+
+    Character(std::shared_ptr<PhysicsEngine> physics, std::unique_ptr<JPH::Character> character);
+public:
+
+    void SetPosition(Vector3 position);
+    Vector3 GetPosition() const;
+
+    void SetRotation(Quaternion rotation);
+    Quaternion GetRotation() const;
 };
 }
 

@@ -5,6 +5,7 @@
 #include <Jolt/Core/JobSystemThreadPool.h>
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
 #include <Jolt/Physics/Collision/Shape/ConvexHullShape.h>
+#include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
 #include <Jolt/Physics/Collision/Shape/SphereShape.h>
 #include <Jolt/RegisterTypes.h>
 
@@ -12,6 +13,7 @@
 #include <raymath.h>
 #include <utility>
 
+#include "Jolt/Physics/Collision/Shape/CapsuleShape.h"
 #include "misc/Log.h"
 
 taco::Collider::Collider(std::shared_ptr<PhysicsEngine> physics, JPH::BodyID body_id, Vector3 com) : body_id_(body_id),
@@ -42,6 +44,29 @@ Vector3 taco::Collider::GetCenterOfMass() const {
     return com_;
 }
 
+taco::Character::Character(std::shared_ptr<PhysicsEngine> physics, std::unique_ptr<JPH::Character> character) :
+    physics_(std::move(physics)), character_(std::move(character)) {}
+
+void taco::Character::SetPosition(Vector3 position) {
+    JPH::RVec3 pos(position.x, position.y, position.z);
+    character_->SetPosition(pos, JPH::EActivation::DontActivate);
+}
+
+Vector3 taco::Character::GetPosition() const {
+    JPH::RVec3 pos = character_->GetPosition();
+    return {pos.GetX(), pos.GetY(), pos.GetZ()};
+}
+
+void taco::Character::SetRotation(Quaternion rotation) {
+    JPH::Quat rot(rotation.x, rotation.y, rotation.z, rotation.w);
+    character_->SetRotation(rot);
+}
+
+Quaternion taco::Character::GetRotation() const {
+    JPH::Quat rot = character_->GetRotation();
+    return {rot.GetX(), rot.GetY(), rot.GetZ(), rot.GetW()};
+}
+
 taco::PhysicsEngine::PhysicsEngine() : body_interface_(system_.GetBodyInterface()) {
     // Startup physics
     JPH::RegisterDefaultAllocator();
@@ -70,11 +95,10 @@ taco::PhysicsEngine::PhysicsEngine() : body_interface_(system_.GetBodyInterface(
 void taco::PhysicsEngine::Update(double delta_time) {
     int steps = std::ceil((1. / 60.) / delta_time);
     system_.Update(delta_time, steps, temp_alloc_.get(), job_system_.get());
-
 }
 
 void taco::PhysicsEngine::Render() {
-    system_.DrawBodies(JPH::BodyManager::DrawSettings{}, JPH::DebugRenderer::sInstance);
+    system_.DrawBodies(JPH::BodyManager::DrawSettings {}, JPH::DebugRenderer::sInstance);
 }
 
 taco::Collider taco::PhysicsEngine::CreateSphereCollider(double radius) {
@@ -101,8 +125,7 @@ taco::Collider taco::PhysicsEngine::CreateMeshCollider(Mesh mesh, bool dynamic) 
         }
         // Construct the settings into the stack var, because there is neither a copy nor a move assignment operator
         new(&settings) JPH::ConvexHullShapeSettings(points);
-    }
-    else {
+    } else {
         new(&settings) JPH::ConvexHullShapeSettings((JPH::Vec3 *) mesh.vertices, mesh.vertexCount);
     }
 
@@ -123,4 +146,24 @@ taco::Collider taco::PhysicsEngine::CreateMeshCollider(Mesh mesh, bool dynamic) 
     }
 
     return Collider(shared_from_this(), mesh_id, center_of_mass);
+}
+
+taco::Character taco::PhysicsEngine::CreateCharacter(double height, double radius) {
+    JPH::Ref<JPH::CharacterSettings> settings = new JPH::CharacterSettings();
+    settings->mMaxSlopeAngle = DEG2RAD * 45.0f;
+    settings->mLayer = Layers::MOVING;
+    settings->mShape = JPH::RotatedTranslatedShapeSettings(JPH::Vec3(0, -0.5f * height + radius, 0),
+                                                           JPH::Quat::sIdentity(),
+                                                           new JPH::CapsuleShape(0.5f * height, radius)).Create().Get();
+    settings->mFriction = 0.5f;
+    settings->mSupportingVolume = JPH::Plane(JPH::Vec3::sAxisY(), -radius);
+    // Accept contacts that touch the lower sphere of the capsule
+    auto character = std::make_unique<JPH::Character>(settings,
+                                                      JPH::RVec3::sZero(),
+                                                      JPH::Quat::sIdentity(),
+                                                      0,
+                                                      &system_);
+    character->AddToPhysicsSystem(JPH::EActivation::Activate);
+
+    return Character(shared_from_this(), std::move(character));
 }
