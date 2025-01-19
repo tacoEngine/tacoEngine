@@ -12,6 +12,7 @@ add_subdirectory(ext/yal)
 
 set(TACO_SOURCES
         src/taco/comp/Camera.h
+        src/taco/comp/Lights.cpp
         src/taco/comp/Lights.h
         src/taco/comp/Transform.h
         src/taco/misc/Debug.cpp

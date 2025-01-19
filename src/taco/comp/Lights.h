@@ -5,6 +5,8 @@
 
 #include "../Graphics.h"
 
+#include <tr_effects.h>
+
 namespace taco {
 struct Sunlight {
     friend class Engine;
@@ -17,6 +19,17 @@ struct Sunlight {
 
 private:
     ShadowMap shadow_map_ = {0};
+};
+
+struct Environment {
+    friend class Engine;
+
+    Environment(const Image &image);
+    Environment(Image irradiance, Image radiance);
+
+private:
+    TextureCubemap radiance_;
+    TextureCubemap irradiance_;
 };
 };
 

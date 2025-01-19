@@ -102,6 +102,7 @@ void Engine::Render() {
 
     auto camera_view = registry.view<const Transform, const Camera>();
     auto model_view = registry.view<const Transform, const Mesh, Material>();
+    auto env_view = registry.view<const Environment>();
 
     BeginGBufferMode(gbuffers_);
     ClearBackground(BLACK);
@@ -165,6 +166,11 @@ void Engine::Render() {
                  sun.intensity,
                  sun.color,
                  sun.shadow_casting ? sun.shadow_map_ : NULL_SHADOW_MAP);
+    }
+
+    for (auto [_, env] : env_view.each()) {
+        // TODO: At least select the closest IBL to the camera
+        LightIBL(presenter_, raylib_camera, env.radiance_, env.irradiance_);
     }
 
     EndLightingPass();
