@@ -14,3 +14,5 @@ taco::Environment::Environment(const Image &image) {
 taco::Environment::Environment(Image irradiance, Image radiance) :
     radiance_(LoadTextureCubemap(irradiance, CUBEMAP_LAYOUT_AUTO_DETECT)),
     irradiance_(LoadTextureCubemap(radiance, CUBEMAP_LAYOUT_AUTO_DETECT)) {}
+
+taco::Sky::Sky(const Image &image) : skybox_(LoadSkyboxImage(image)) {}

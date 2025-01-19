@@ -103,6 +103,7 @@ void Engine::Render() {
     auto camera_view = registry.view<const Transform, const Camera>();
     auto model_view = registry.view<const Transform, const Mesh, Material>();
     auto env_view = registry.view<const Environment>();
+    auto sky_view = registry.view<const Sky>();
 
     BeginGBufferMode(gbuffers_);
     ClearBackground(BLACK);
@@ -119,6 +120,10 @@ void Engine::Render() {
 
         if (config_.debug_physics)
             physics_->Render();
+
+        for (auto [_, sky] : sky_view.each()) {
+            DrawSkybox(sky.skybox_, WHITE);
+        }
 
         EndMode3D();
     }
@@ -175,6 +180,8 @@ void Engine::Render() {
         // TODO: At least select the closest IBL to the camera
         LightIBL(presenter_, raylib_camera, env.radiance_, env.irradiance_);
     }
+
+    CopyBackground(presenter_);
 
     EndLightingPass();
 

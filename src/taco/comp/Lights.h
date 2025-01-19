@@ -31,6 +31,15 @@ private:
     TextureCubemap radiance_;
     TextureCubemap irradiance_;
 };
+
+struct Sky {
+    friend class Engine;
+
+    Sky(const Image &image);
+
+private:
+    Skybox skybox_;
+};
 };
 
 #endif //LIGHTS_H
