@@ -73,11 +73,13 @@ void Engine::Update(double delta_time) {
     for (auto [_, collider, transform] : collider_view.each()) {
         collider.SetPosition(transform.position);
         collider.SetRotation(transform.rotation);
+        collider.SetVelocity(transform.velocity);
     }
 
     for (auto [_, character, transform] : character_view.each()) {
         character.SetPosition(transform.position);
         character.SetRotation(transform.rotation);
+        character.SetVelocity(transform.velocity);
     }
 
     physics_->Update(delta_time);
@@ -85,11 +87,13 @@ void Engine::Update(double delta_time) {
     for (auto [_, collider, transform] : collider_view.each()) {
         transform.position = collider.GetPosition();
         transform.rotation = collider.GetRotation();
+        transform.velocity = collider.GetVelocity();
     }
 
     for (auto [_, character, transform] : character_view.each()) {
         transform.position = character.GetPosition();
         transform.rotation = character.GetRotation();
+        transform.velocity = character.GetVelocity();
     }
 
     visit_systems([&](std::shared_ptr<System> system, entt::entity entity) {system->UpdatePostPhysics(this, entity);});

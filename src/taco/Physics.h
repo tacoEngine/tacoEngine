@@ -147,6 +147,9 @@ public:
     void SetRotation(Quaternion position);
     Quaternion GetRotation() const;
 
+    void SetVelocity(Vector3 velocity);
+    Vector3 GetVelocity() const;
+
     Vector3 GetCenterOfMass() const;
 };
 
@@ -164,6 +167,9 @@ public:
 
     void SetRotation(Quaternion rotation);
     Quaternion GetRotation() const;
+
+    void SetVelocity(Vector3 velocity);
+    Vector3 GetVelocity() const;
 };
 }
 

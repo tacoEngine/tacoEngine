@@ -40,6 +40,16 @@ Quaternion taco::Collider::GetRotation() const {
     return {rot.GetX(), rot.GetY(), rot.GetZ(), rot.GetW()};
 }
 
+void taco::Collider::SetVelocity(Vector3 velocity) {
+    JPH::RVec3 vel(velocity.x, velocity.y, velocity.z);
+    physics_->body_interface_.SetLinearVelocity(body_id_, vel);
+}
+
+Vector3 taco::Collider::GetVelocity() const {
+    JPH::RVec3 vel = physics_->body_interface_.GetLinearVelocity(body_id_);
+    return {vel.GetX(), vel.GetY(), vel.GetZ()};
+}
+
 Vector3 taco::Collider::GetCenterOfMass() const {
     return com_;
 }
@@ -65,6 +75,16 @@ void taco::Character::SetRotation(Quaternion rotation) {
 Quaternion taco::Character::GetRotation() const {
     JPH::Quat rot = character_->GetRotation();
     return {rot.GetX(), rot.GetY(), rot.GetZ(), rot.GetW()};
+}
+
+void taco::Character::SetVelocity(Vector3 velocity) {
+    JPH::RVec3 vel(velocity.x, velocity.y, velocity.z);
+   character_->SetLinearVelocity(vel);
+}
+
+Vector3 taco::Character::GetVelocity() const {
+    JPH::RVec3 vel = character_->GetLinearVelocity();
+    return {vel.GetX(), vel.GetY(), vel.GetZ()};
 }
 
 taco::PhysicsEngine::PhysicsEngine() : body_interface_(system_.GetBodyInterface()) {
