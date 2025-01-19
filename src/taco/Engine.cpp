@@ -157,6 +157,9 @@ void Engine::Render() {
 
     ClearPresenter(presenter_);
 
+    if (config_.ssao)
+        ApplySSAO(presenter_, raylib_camera);
+
     BeginLightingPass(presenter_);
 
     for (auto [_, transform, sun] : sun_view.each()) {

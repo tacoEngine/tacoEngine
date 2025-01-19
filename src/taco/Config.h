@@ -8,6 +8,7 @@
 namespace taco {
 struct Config {
     bool debug_physics = false;
+    bool ssao = true;
     float gamma_correction = 2.2f;
     ToneMapper tone_mapper;
     unsigned int shadow_map_size = 2048;
