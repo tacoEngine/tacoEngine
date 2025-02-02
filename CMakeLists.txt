@@ -25,6 +25,8 @@ set(TACO_SOURCES
         src/taco/Graphics.h
         src/taco/Physics.cpp
         src/taco/Physics.h
+        src/taco/misc/Rotation.cpp
+        src/taco/misc/Rotation.h
 )
 
 add_library(tacoEngine ${TACO_SOURCES})

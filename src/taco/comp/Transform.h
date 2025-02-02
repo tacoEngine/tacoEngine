@@ -5,11 +5,13 @@
 
 #include <raylib.h>
 
+#include "taco/misc/Rotation.h"
+
 namespace taco {
 
 struct Transform {
     Vector3 position;
-    Quaternion rotation;
+    Rotation rotation;
     Vector3 velocity;
 };
 

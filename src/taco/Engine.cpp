@@ -72,13 +72,13 @@ void Engine::Update(double delta_time) {
 
     for (auto [_, collider, transform] : collider_view.each()) {
         collider.SetPosition(transform.position);
-        collider.SetRotation(transform.rotation);
+        collider.SetRotation(transform.rotation.GetQuaternion());
         collider.SetVelocity(transform.velocity);
     }
 
     for (auto [_, character, transform] : character_view.each()) {
         character.SetPosition(transform.position);
-        character.SetRotation(transform.rotation);
+        character.SetRotation(transform.rotation.GetQuaternion());
         character.SetVelocity(transform.velocity);
     }
 
@@ -86,13 +86,13 @@ void Engine::Update(double delta_time) {
 
     for (auto [_, collider, transform] : collider_view.each()) {
         transform.position = collider.GetPosition();
-        transform.rotation = collider.GetRotation();
+        transform.rotation.SetFromQuaternion(collider.GetRotation());
         transform.velocity = collider.GetVelocity();
     }
 
     for (auto [_, character, transform] : character_view.each()) {
         transform.position = character.GetPosition();
-        transform.rotation = character.GetRotation();
+        transform.rotation.SetFromQuaternion(character.GetRotation());
         transform.velocity = character.GetVelocity();
     }
 
@@ -115,7 +115,7 @@ void Engine::Render() {
     Camera3D raylib_camera = {};
 
     for (auto [_, transform, cam] : camera_view.each()) {
-        Vector3 camera_target = transform.position + Vector3RotateByQuaternion(Vector3 {0, 0, -1}, transform.rotation);
+        Vector3 camera_target = transform.position + Vector3RotateByQuaternion(Vector3 {0, 0, -1}, transform.rotation.GetQuaternion());
         raylib_camera = {transform.position, camera_target, {0, 1, 0}, cam.fov, CAMERA_PERSPECTIVE};
 
         BeginMode3D(raylib_camera);
@@ -151,7 +151,7 @@ void Engine::Render() {
         }
 
         for (int i = 0; i < cascadeCount; i++) {
-            Vector3 direction = Vector3RotateByQuaternion(Vector3 {0, 0, -1}, transform.rotation);
+            Vector3 direction = Vector3RotateByQuaternion(Vector3 {0, 0, -1}, transform.rotation.GetQuaternion());
             BeginShadowMap(sun.shadow_map_, raylib_camera, direction, i);
 
             ClearBackground(BLANK);
@@ -174,7 +174,7 @@ void Engine::Render() {
     for (auto [_, transform, sun] : sun_view.each()) {
         LightSun(presenter_,
                  raylib_camera,
-                 Vector3RotateByQuaternion(Vector3 {0, 0, -1}, transform.rotation),
+                 Vector3RotateByQuaternion(Vector3 {0, 0, -1}, transform.rotation.GetQuaternion()),
                  sun.intensity,
                  sun.color,
                  sun.shadow_casting ? sun.shadow_map_ : NULL_SHADOW_MAP);
@@ -200,7 +200,7 @@ void Engine::Render() {
 void Engine::DrawAllMeshes(const decltype(registry.view<const Transform, const Mesh, Material>()) &model_view, Shader shader) {
     for (auto [_, transform, mesh, material] : model_view.each()) {
         Matrix mat_translate = MatrixTranslate(transform.position.x, transform.position.y, transform.position.z);
-        Matrix mat_rotate = QuaternionToMatrix(transform.rotation);
+        Matrix mat_rotate = QuaternionToMatrix(transform.rotation.GetQuaternion());
         material.shader = shader;
         DrawMesh(mesh, material, MatrixMultiply(mat_rotate, mat_translate));
     }
