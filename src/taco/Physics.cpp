@@ -172,7 +172,7 @@ taco::Character taco::PhysicsEngine::CreateCharacter(double height, double radiu
     JPH::Ref<JPH::CharacterSettings> settings = new JPH::CharacterSettings();
     settings->mMaxSlopeAngle = DEG2RAD * 45.0f;
     settings->mLayer = Layers::MOVING;
-    settings->mShape = JPH::RotatedTranslatedShapeSettings(JPH::Vec3(0, -0.5f * height + radius, 0),
+    settings->mShape = JPH::RotatedTranslatedShapeSettings(JPH::Vec3(0, 0.5f * height + radius, 0),
                                                            JPH::Quat::sIdentity(),
                                                            new JPH::CapsuleShape(0.5f * height, radius)).Create().Get();
     settings->mFriction = 0.5f;
