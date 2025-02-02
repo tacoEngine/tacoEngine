@@ -87,6 +87,10 @@ Vector3 taco::Character::GetVelocity() const {
     return {vel.GetX(), vel.GetY(), vel.GetZ()};
 }
 
+bool taco::Character::OnGround() const {
+    return character_->IsSupported();
+}
+
 taco::PhysicsEngine::PhysicsEngine() : body_interface_(system_.GetBodyInterface()) {
     // Startup physics
     JPH::RegisterDefaultAllocator();
@@ -175,7 +179,7 @@ taco::Character taco::PhysicsEngine::CreateCharacter(double height, double radiu
     settings->mShape = JPH::RotatedTranslatedShapeSettings(JPH::Vec3(0, 0.5f * height + radius, 0),
                                                            JPH::Quat::sIdentity(),
                                                            new JPH::CapsuleShape(0.5f * height, radius)).Create().Get();
-    settings->mFriction = 0.5f;
+    settings->mFriction = 0.f;
     settings->mSupportingVolume = JPH::Plane(JPH::Vec3::sAxisY(), -radius);
     // Accept contacts that touch the lower sphere of the capsule
     auto character = std::make_unique<JPH::Character>(settings,

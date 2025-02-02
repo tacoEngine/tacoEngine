@@ -95,6 +95,8 @@ void Engine::Update(double delta_time) {
         transform.position = character.GetPosition();
         transform.rotation.SetFromQuaternion(character.GetRotation());
         transform.velocity = character.GetVelocity();
+
+        character.character_->PostSimulation(0.01f);
     }
 
     for (auto [_, link, transform] : link_view.each()) {

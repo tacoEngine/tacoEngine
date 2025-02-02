@@ -155,12 +155,14 @@ public:
 
 class Character {
     friend class PhysicsEngine;
+    friend class Engine;
 
     std::unique_ptr<JPH::Character> character_;
     std::shared_ptr<PhysicsEngine> physics_;
 
     Character(std::shared_ptr<PhysicsEngine> physics, std::unique_ptr<JPH::Character> character);
 public:
+    bool OnGround() const;
 
     void SetPosition(Vector3 position);
     Vector3 GetPosition() const;
