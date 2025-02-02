@@ -69,6 +69,7 @@ void Engine::Update(double delta_time) {
 
     auto collider_view = registry.view<Collider, Transform>();
     auto character_view = registry.view<Character, Transform>();
+    auto link_view = registry.view<Link, Transform>();
 
     for (auto [_, collider, transform] : collider_view.each()) {
         collider.SetPosition(transform.position);
@@ -94,6 +95,31 @@ void Engine::Update(double delta_time) {
         transform.position = character.GetPosition();
         transform.rotation.SetFromQuaternion(character.GetRotation());
         transform.velocity = character.GetVelocity();
+    }
+
+    for (auto [_, link, transform] : link_view.each()) {
+        auto &remote_transform = registry.get<Transform>(link.entity);
+
+        if (link.linkPosX)
+            transform.position.x = remote_transform.position.x;
+        if (link.linkPosY)
+            transform.position.y = remote_transform.position.y;
+        if (link.linkPosZ)
+            transform.position.z = remote_transform.position.z;
+
+        if (link.linkRotX)
+            transform.rotation.x = remote_transform.rotation.x;
+        if (link.linkRotY)
+            transform.rotation.y = remote_transform.rotation.y;
+        if (link.linkRotZ)
+            transform.rotation.z = remote_transform.rotation.z;
+
+        if (link.linkVelX)
+            transform.velocity.x = remote_transform.velocity.x;
+        if (link.linkVelY)
+            transform.velocity.y = remote_transform.velocity.y;
+        if (link.linkVelZ)
+            transform.velocity.z = remote_transform.velocity.z;
     }
 
     visit_systems([&](std::shared_ptr<System> system, entt::entity entity) {system->UpdatePostPhysics(this, entity);});

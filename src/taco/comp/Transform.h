@@ -15,6 +15,12 @@ struct Transform {
     Vector3 velocity;
 };
 
+struct Link {
+    entt::entity entity;
+    bool linkPosX, linkPosY, linkPosZ;
+    bool linkRotX, linkRotY, linkRotZ;
+    bool linkVelX, linkVelY, linkVelZ;
+};
 }
 
 #endif //POSITION_H
