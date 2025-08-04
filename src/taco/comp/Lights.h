@@ -3,42 +3,42 @@
 #ifndef LIGHTS_H
 #define LIGHTS_H
 
-#include "../Graphics.h"
+#include "taco/Graphics.h"
 
 #include <tr_effects.h>
 
 namespace taco {
-struct Sunlight {
+class Sunlight {
     friend class Engine;
+
+    ShadowMap shadow_map_ = {0};
+public:
 
     float intensity;
     Color color;
     bool shadow_casting;
 
     Sunlight(float inten = 1.f, Color col = WHITE, bool sh = true) : intensity(inten), color(col), shadow_casting(sh) {}
-
-private:
-    ShadowMap shadow_map_ = {0};
 };
 
-struct Environment {
+class Environment {
     friend class Engine;
 
-    Environment(const Image &image);
-    Environment(Image irradiance, Image radiance);
-
-private:
     TextureCubemap radiance_;
     TextureCubemap irradiance_;
+
+public:
+    Environment(const Image &image);
+    Environment(Image irradiance, Image radiance);
 };
 
-struct Sky {
+class Sky {
     friend class Engine;
 
-    Sky(const Image &image);
-
-private:
     Skybox skybox_;
+public:
+
+    Sky(const Image &image);
 };
 };
 

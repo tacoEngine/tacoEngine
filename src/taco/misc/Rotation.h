@@ -3,9 +3,7 @@
 #ifndef ROTATION_H
 #define ROTATION_H
 
-#include <raylib.h>
-
-#include "raymath.h"
+#include <raymath.h>
 
 namespace taco {
 class Rotation : public Vector3 {

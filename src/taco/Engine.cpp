@@ -57,15 +57,19 @@ void Engine::Update(double delta_time) {
         for (auto [id, pool] : registry.storage()) {
             if (registry.storage(id)->type() != entt::type_id<std::shared_ptr<System>>())
                 continue;
-            auto system_view = entt::basic_view{registry.storage<std::shared_ptr<System>>(id)};
+            auto system_view = entt::basic_view {registry.storage<std::shared_ptr<System>>(id)};
             for (auto [entity, system] : system_view.each()) {
                 func(system, entity);
             }
         }
     };
 
-    visit_systems([&](std::shared_ptr<System> system, entt::entity entity) {system->UpdateEarly(this, entity);});
-    visit_systems([&](std::shared_ptr<System> system, entt::entity entity) {system->UpdatePrePhysics(this, entity);});
+    visit_systems([&](std::shared_ptr<System> system, entt::entity entity) {
+        system->UpdateEarly(this, entity);
+    });
+    visit_systems([&](std::shared_ptr<System> system, entt::entity entity) {
+        system->UpdatePrePhysics(this, entity);
+    });
 
     auto collider_view = registry.view<Collider, Transform>();
     auto character_view = registry.view<Character, Transform>();
@@ -124,8 +128,12 @@ void Engine::Update(double delta_time) {
             transform.velocity.z = remote_transform.velocity.z;
     }
 
-    visit_systems([&](std::shared_ptr<System> system, entt::entity entity) {system->UpdatePostPhysics(this, entity);});
-    visit_systems([&](std::shared_ptr<System> system, entt::entity entity) {system->UpdateLate(this, entity);});
+    visit_systems([&](std::shared_ptr<System> system, entt::entity entity) {
+        system->UpdatePostPhysics(this, entity);
+    });
+    visit_systems([&](std::shared_ptr<System> system, entt::entity entity) {
+        system->UpdateLate(this, entity);
+    });
 }
 
 void Engine::Render() {
@@ -143,7 +151,9 @@ void Engine::Render() {
     Camera3D raylib_camera = {};
 
     for (auto [_, transform, cam] : camera_view.each()) {
-        Vector3 camera_target = transform.position + Vector3RotateByQuaternion(Vector3 {0, 0, -1}, transform.rotation.GetQuaternion());
+        Vector3 camera_target = transform.position + Vector3RotateByQuaternion(
+            Vector3 {0, 0, -1},
+            transform.rotation.GetQuaternion());
         raylib_camera = {transform.position, camera_target, {0, 1, 0}, cam.fov, CAMERA_PERSPECTIVE};
 
         BeginMode3D(raylib_camera);
@@ -225,7 +235,8 @@ void Engine::Render() {
     running_ = !WindowShouldClose();
 }
 
-void Engine::DrawAllMeshes(const decltype(registry.view<const Transform, const Mesh, Material>()) &model_view, Shader shader) {
+void Engine::DrawAllMeshes(const decltype(registry.view<const Transform, const Mesh, Material>()) &model_view,
+                           Shader shader) {
     for (auto [_, transform, mesh, material] : model_view.each()) {
         Matrix mat_translate = MatrixTranslate(transform.position.x, transform.position.y, transform.position.z);
         Matrix mat_rotate = QuaternionToMatrix(transform.rotation.GetQuaternion());

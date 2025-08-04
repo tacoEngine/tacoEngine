@@ -3,8 +3,6 @@
 #ifndef POSITION_H
 #define POSITION_H
 
-#include <raylib.h>
-
 #include "taco/misc/Rotation.h"
 
 namespace taco {
