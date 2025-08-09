@@ -79,7 +79,7 @@ Quaternion taco::Character::GetRotation() const {
 
 void taco::Character::SetVelocity(Vector3 velocity) {
     JPH::RVec3 vel(velocity.x, velocity.y, velocity.z);
-   character_->SetLinearVelocity(vel);
+    character_->SetLinearVelocity(vel);
 }
 
 Vector3 taco::Character::GetVelocity() const {
@@ -115,6 +115,12 @@ taco::PhysicsEngine::PhysicsEngine() : body_interface_(system_.GetBodyInterface(
                  object_vs_broadphase_layer_filter_,
                  object_vs_object_layer_filter_);
 }
+
+void taco::PhysicsEngine::SetGravity(Vector3 gravity) {
+    JPH::Vec3Arg grav(gravity.x, gravity.y, gravity.z);
+    system_.SetGravity(grav);
+}
+
 
 void taco::PhysicsEngine::Update(double delta_time) {
     int steps = std::ceil((1. / 60.) / delta_time);

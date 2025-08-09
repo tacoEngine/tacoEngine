@@ -122,6 +122,8 @@ class PhysicsEngine : public std::enable_shared_from_this<PhysicsEngine> {
 public:
     PhysicsEngine();
 
+    void SetGravity(Vector3 gravity);
+
     void Update(double delta_time);
     void Render();
 
@@ -139,8 +141,8 @@ class Collider {
     Vector3 com_;
 
     Collider(std::shared_ptr<PhysicsEngine> physics, JPH::BodyID body_id, Vector3 com);
-public:
 
+public:
     void SetPosition(Vector3 position);
     Vector3 GetPosition() const;
 
@@ -161,6 +163,7 @@ class Character {
     std::shared_ptr<PhysicsEngine> physics_;
 
     Character(std::shared_ptr<PhysicsEngine> physics, std::unique_ptr<JPH::Character> character);
+
 public:
     bool OnGround() const;
 
