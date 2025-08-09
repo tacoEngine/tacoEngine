@@ -14,6 +14,7 @@ class System {
     virtual void UpdatePrePhysics(Engine *engine, entt::entity entity) {}
     virtual void UpdatePostPhysics(Engine *engine, entt::entity entity) {}
     virtual void UpdateLate(Engine *engine, entt::entity entity) {}
+    virtual void UpdateUI(Engine *engine, entt::entity entity) {}
 };
 }
 

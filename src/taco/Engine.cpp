@@ -9,6 +9,7 @@
 #include <raymath.h>
 #include <tr_effects.h>
 
+#include "rlgl.h"
 #include "comp/Camera.h"
 #include "comp/Lights.h"
 #include "comp/System.h"
@@ -230,7 +231,23 @@ void Engine::Render() {
     ApplyToneMapping(presenter_, config_.tone_mapper);
     ApplyGammaCorrection(presenter_, config_.gamma_correction);
 
-    Present(presenter_);
+    BeginDrawing();
+
+    ClearBackground(BLANK);
+
+    DrawTexture(presenter_.target.texture, 0, 0, WHITE);
+    rlEnableColorBlend();
+    DrawFPS(0, 0);
+    for (auto [id, pool] : registry.storage()) {
+        if (registry.storage(id)->type() != entt::type_id<std::shared_ptr<System>>())
+            continue;
+        auto system_view = entt::basic_view {registry.storage<std::shared_ptr<System>>(id)};
+        for (auto [entity, system] : system_view.each()) {
+            system->UpdateUI(this, entity);
+        }
+    }
+
+    EndDrawing();
 
     running_ = !WindowShouldClose();
 }
