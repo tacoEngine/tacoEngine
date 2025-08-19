@@ -13,6 +13,10 @@ struct Config {
     ToneMapper tone_mapper;
     unsigned int shadow_map_size = 2048;
     float cascade_dist = 100.f;
+    // 0 - no filtering
+    // 1 - 5x5 gauss blur
+    // n - (5x5)^n gauss blur
+    unsigned int shadow_map_quality = 1;
 };
 };
 
