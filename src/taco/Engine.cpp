@@ -10,6 +10,7 @@
 #include <tr_effects.h>
 
 #include "rlgl.h"
+#include "tr_timing.h"
 #include "comp/Camera.h"
 #include "comp/Lights.h"
 #include "comp/System.h"
@@ -138,6 +139,19 @@ void Engine::Update(double delta_time) {
 }
 
 void Engine::Render() {
+    static Timer timers[6];
+    float timings[6] = {0.0f};
+
+    if (!timers[0].query) {
+        for (auto &timer : timers) {
+            InitTimer(&timer);
+        }
+    }
+
+    for (int i = 0; i < 6; i++) {
+        timings[i] = timers[i].Get();
+    }
+
     if (IsWindowResized())
         ReloadGBuffers();
 
@@ -145,6 +159,8 @@ void Engine::Render() {
     auto model_view = registry.view<const Transform, const Mesh, Material>();
     auto env_view = registry.view<const Environment>();
     auto sky_view = registry.view<const Sky>();
+
+    timers[0].Start();
 
     BeginGBufferMode(gbuffers_);
     ClearBackground(BLACK);
@@ -173,6 +189,8 @@ void Engine::Render() {
 
     EndGBufferMode();
 
+    timers[0].Stop();
+
     auto sun_view = registry.view<const Transform, Sunlight>();
 
     for (auto [_, transform, sun] : sun_view.each()) {
@@ -189,6 +207,8 @@ void Engine::Render() {
             sun.shadow_map_ = LoadShadowMap(config_.shadow_map_size, cascadeCount, config_.cascade_dist);
         }
 
+        timers[1].Start();
+
         for (int i = 0; i < cascadeCount; i++) {
             Vector3 direction = Vector3RotateByQuaternion(Vector3 {0, 0, -1}, transform.rotation.GetQuaternion());
             BeginShadowMap(sun.shadow_map_, raylib_camera, direction, i);
@@ -200,8 +220,15 @@ void Engine::Render() {
             EndShadowMap();
         }
 
+        timers[1].Stop();
+        timers[2].Start();
+
         FilterShadowMap(sun.shadow_map_);
+
+        timers[2].Stop();
     }
+
+    timers[3].Start();
 
     ClearPresenter(presenter_);
 
@@ -228,8 +255,14 @@ void Engine::Render() {
 
     EndLightingPass();
 
+    timers[3].Stop();
+    timers[4].Start();
+
     ApplyToneMapping(presenter_, config_.tone_mapper);
     ApplyGammaCorrection(presenter_, config_.gamma_correction);
+
+    timers[4].Stop();
+    timers[5].Start();
 
     BeginDrawing();
 
@@ -238,6 +271,21 @@ void Engine::Render() {
     DrawTexture(presenter_.target.texture, 0, 0, WHITE);
     rlEnableColorBlend();
     DrawFPS(0, 0);
+
+    DrawText("Geometry", 0, 150 + 12 * 0, 12, WHITE);
+    DrawText("Shadow", 0, 150 + 12 * 1, 12, WHITE);
+    DrawText("Shadow PP", 0, 150 + 12 * 2, 12, WHITE);
+    DrawText("Lighting", 0, 150 + 12 * 3, 12, WHITE);
+    DrawText("PP", 0, 150 + 12 * 4, 12, WHITE);
+    DrawText("Blit", 0, 150 + 12 * 5, 12, WHITE);
+
+    DrawText(std::to_string(timings[0]).c_str(), 70, 150 + 12 * 0, 12, WHITE);
+    DrawText(std::to_string(timings[1]).c_str(), 70, 150 + 12 * 1, 12, WHITE);
+    DrawText(std::to_string(timings[2]).c_str(), 70, 150 + 12 * 2, 12, WHITE);
+    DrawText(std::to_string(timings[3]).c_str(), 70, 150 + 12 * 3, 12, WHITE);
+    DrawText(std::to_string(timings[4]).c_str(), 70, 150 + 12 * 4, 12, WHITE);
+    DrawText(std::to_string(timings[5]).c_str(), 70, 150 + 12 * 5, 12, WHITE);
+
     for (auto [id, pool] : registry.storage()) {
         if (registry.storage(id)->type() != entt::type_id<std::shared_ptr<System>>())
             continue;
@@ -246,6 +294,10 @@ void Engine::Render() {
             system->UpdateUI(this, entity);
         }
     }
+
+    rlDrawRenderBatchActive();
+
+    timers[5].Stop();
 
     EndDrawing();
 
