@@ -28,10 +28,6 @@ Engine::Engine() {
 
     SetExitKey(0);
 
-#if !defined(NDEBUG)
-    SetTargetFPS(60);
-#endif
-
     physics_ = std::make_shared<PhysicsEngine>();
     debug_renderer_ = std::make_unique<RaylibDebugRenderer>();
 
