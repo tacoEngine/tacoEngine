@@ -1,8 +1,14 @@
 cmake_minimum_required(VERSION 3.29)
+cmake_policy(SET CMP0077 NEW)
+set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
+
 project(tacoEngine)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_FLAGS -fno-rtti)
+
+set(RAPIDJSON_BUILD_EXAMPLES OFF)
+set(RAPIDJSON_BUILD_TESTS OFF)
 
 add_subdirectory(ext/entt)
 add_subdirectory(ext/JoltPhysics/Build)
