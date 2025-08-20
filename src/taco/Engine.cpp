@@ -135,8 +135,8 @@ void Engine::Update(double delta_time) {
 }
 
 void Engine::Render() {
-    static Timer timers[6];
-    float timings[6] = {0.0f};
+    static Timer timers[7];
+    float timings[7] = {0.0f};
 
     if (!timers[0].query) {
         for (auto &timer : timers) {
@@ -231,6 +231,9 @@ void Engine::Render() {
     if (config_.ssao)
         ApplySSAO(presenter_, raylib_camera);
 
+    timers[3].Stop();
+    timers[4].Start();
+
     BeginLightingPass(presenter_);
 
     for (auto [_, transform, sun] : sun_view.each()) {
@@ -251,14 +254,14 @@ void Engine::Render() {
 
     EndLightingPass();
 
-    timers[3].Stop();
-    timers[4].Start();
+    timers[4].Stop();
+    timers[5].Start();
 
     ApplyToneMapping(presenter_, config_.tone_mapper);
     ApplyGammaCorrection(presenter_, config_.gamma_correction);
 
-    timers[4].Stop();
-    timers[5].Start();
+    timers[5].Stop();
+    timers[6].Start();
 
     BeginDrawing();
 
@@ -271,9 +274,10 @@ void Engine::Render() {
     DrawText("Geometry", 0, 150 + 12 * 0, 12, WHITE);
     DrawText("Shadow", 0, 150 + 12 * 1, 12, WHITE);
     DrawText("Shadow PP", 0, 150 + 12 * 2, 12, WHITE);
-    DrawText("Lighting", 0, 150 + 12 * 3, 12, WHITE);
-    DrawText("PP", 0, 150 + 12 * 4, 12, WHITE);
-    DrawText("Blit", 0, 150 + 12 * 5, 12, WHITE);
+    DrawText("SSAO", 0, 150 + 12 * 3, 12, WHITE);
+    DrawText("Lighting", 0, 150 + 12 * 4, 12, WHITE);
+    DrawText("PP", 0, 150 + 12 * 5, 12, WHITE);
+    DrawText("Blit", 0, 150 + 12 * 6, 12, WHITE);
 
     DrawText(std::to_string(timings[0]).c_str(), 70, 150 + 12 * 0, 12, WHITE);
     DrawText(std::to_string(timings[1]).c_str(), 70, 150 + 12 * 1, 12, WHITE);
@@ -281,6 +285,7 @@ void Engine::Render() {
     DrawText(std::to_string(timings[3]).c_str(), 70, 150 + 12 * 3, 12, WHITE);
     DrawText(std::to_string(timings[4]).c_str(), 70, 150 + 12 * 4, 12, WHITE);
     DrawText(std::to_string(timings[5]).c_str(), 70, 150 + 12 * 5, 12, WHITE);
+    DrawText(std::to_string(timings[6]).c_str(), 70, 150 + 12 * 6, 12, WHITE);
 
     for (auto [id, pool] : registry.storage()) {
         if (registry.storage(id)->type() != entt::type_id<std::shared_ptr<System>>())
@@ -293,7 +298,7 @@ void Engine::Render() {
 
     rlDrawRenderBatchActive();
 
-    timers[5].Stop();
+    timers[6].Stop();
 
     EndDrawing();
 
