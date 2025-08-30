@@ -15,10 +15,10 @@
 using namespace entt::literals;
 
 namespace taco {
-
 class Engine {
     bool running_ = false;
-    double delta_time_ = 0.0f;
+    int64_t delta_time_ = 0.0f;
+    long long accumulator_ = 0.f;
 
     std::shared_ptr<PhysicsEngine> physics_;
     std::unique_ptr<RaylibDebugRenderer> debug_renderer_;
@@ -26,6 +26,7 @@ class Engine {
 
     GBuffers gbuffers_;
     GBufferPresenter presenter_;
+
 public:
     entt::registry registry;
 
@@ -37,14 +38,15 @@ public:
     double GetDeltaTime() const;
 
     Config SwapConfig(Config con);
+
 private:
-    void Update(double delta_time);
+    void Update();
     void Render();
-    void DrawAllMeshes(const decltype(registry.view<const Transform, const Mesh, Material>()) &model_view, Shader shader = LoadMaterialDefault().shader);
+    void DrawAllMeshes(const decltype(registry.view<const Transform, const Mesh, Material>()) &model_view,
+                       Shader shader = LoadMaterialDefault().shader);
 
     void ReloadGBuffers();
 };
-
 } // taco
 
 #endif //ENGINE_H

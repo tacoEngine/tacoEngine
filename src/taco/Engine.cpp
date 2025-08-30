@@ -4,6 +4,7 @@
 
 #include <vector>
 #include <memory>
+#include <ratio>
 
 #include <raylib.h>
 #include <raymath.h>
@@ -37,20 +38,22 @@ Engine::Engine() {
 void Engine::Run() {
     running_ = true;
 
-    double last_time = GetTime();
+    std::chrono::steady_clock::time_point last_frame = std::chrono::steady_clock::now();
 
     while (running_) {
         Render();
 
-        double current_time = GetTime();
-        delta_time_ = current_time - last_time;
-        last_time = current_time;
+        auto now = std::chrono::steady_clock::now();
 
-        Update(delta_time_);
+        std::chrono::duration<int64_t, std::nano> frame_delta = now - last_frame;
+        delta_time_ = frame_delta.count();
+        last_frame = now;
+
+        Update();
     }
 }
 
-void Engine::Update(double delta_time) {
+void Engine::Update() {
     auto visit_systems = [&](auto func) {
         for (auto [id, pool] : registry.storage()) {
             if (registry.storage(id)->type() != entt::type_id<std::shared_ptr<System>>())
@@ -85,7 +88,7 @@ void Engine::Update(double delta_time) {
         character.SetVelocity(transform.velocity);
     }
 
-    physics_->Update(delta_time);
+    physics_->Update(GetDeltaTime());
 
     for (auto [_, collider, transform] : collider_view.each()) {
         transform.position = collider.GetPosition();
@@ -327,7 +330,7 @@ std::shared_ptr<PhysicsEngine> Engine::GetPhysics() const {
 }
 
 double Engine::GetDeltaTime() const {
-    return delta_time_;
+    return (double) delta_time_ / (double) std::nano::den;
 }
 
 Config Engine::SwapConfig(Config con) {
