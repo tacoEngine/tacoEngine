@@ -6,6 +6,7 @@
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
 #include <Jolt/Physics/Collision/Shape/ConvexHullShape.h>
 #include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
+#include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
 #include <Jolt/Physics/Collision/Shape/SphereShape.h>
 #include <Jolt/RegisterTypes.h>
 
@@ -13,7 +14,6 @@
 #include <raymath.h>
 #include <utility>
 
-#include "Jolt/Physics/Collision/Shape/CapsuleShape.h"
 #include "misc/Log.h"
 
 taco::Collider::Collider(std::shared_ptr<PhysicsEngine> physics, JPH::BodyID body_id, Vector3 com) : body_id_(body_id),
@@ -186,7 +186,7 @@ taco::Character taco::PhysicsEngine::CreateCharacter(double height, double radiu
                                                            JPH::Quat::sIdentity(),
                                                            new JPH::CapsuleShape(0.5f * height, radius)).Create().Get();
     settings->mFriction = 0.f;
-    settings->mSupportingVolume = JPH::Plane(JPH::Vec3::sAxisY(), -radius);
+    settings->mSupportingVolume = JPH::Plane(JPH::Vec3::sAxisY(), -0.5f * radius);
     // Accept contacts that touch the lower sphere of the capsule
     auto character = std::make_unique<JPH::Character>(settings,
                                                       JPH::RVec3::sZero(),
