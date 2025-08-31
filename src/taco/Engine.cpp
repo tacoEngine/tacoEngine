@@ -349,8 +349,8 @@ size_t Engine::DrawAllMeshes(const decltype(registry.view<const Transform, const
 }
 
 void Engine::ReloadGBuffers() {
-    //UnloadGBuffers(gbuffers_);
-    //UnloadPresenter(presenter_);
+    UnloadGBuffers(gbuffers_);
+    UnloadPresenter(presenter_);
     gbuffers_ = LoadGBuffers(GetScreenWidth(), GetScreenHeight());
     presenter_ = LoadPresenter(gbuffers_);
 }
