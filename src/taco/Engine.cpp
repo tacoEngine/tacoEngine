@@ -11,6 +11,7 @@
 #include <tr_effects.h>
 
 #include "rlgl.h"
+#include "tr_shaders.h"
 #include "tr_timing.h"
 #include "comp/Camera.h"
 #include "comp/Lights.h"
@@ -238,13 +239,13 @@ void Engine::Render() {
 
     timers[3].Start();
 
-    ClearPresenter(presenter_);
-
     if (config_.ssao)
         ApplySSAO(presenter_, raylib_camera);
 
     timers[3].Stop();
     timers[4].Start();
+
+    ClearPresenter(presenter_);
 
     BeginLightingPass(presenter_);
 
@@ -279,7 +280,7 @@ void Engine::Render() {
 
     ClearBackground(BLANK);
 
-    DrawTexture(presenter_.target.texture, 0, 0, WHITE);
+    DrawTexture(presenter_.back[0].texture, 0, 0, WHITE);
     rlEnableColorBlend();
     DrawFPS(0, 0);
 
