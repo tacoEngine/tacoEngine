@@ -11,6 +11,7 @@
 #include "Config.h"
 #include "misc/Debug.h"
 #include "Physics.h"
+#include "tr_math.h"
 
 using namespace entt::literals;
 
@@ -27,6 +28,8 @@ class Engine {
     GBuffers gbuffers_;
     GBufferPresenter presenter_;
 
+    size_t mesh_count_ = 0;
+
 public:
     entt::registry registry;
 
@@ -42,8 +45,9 @@ public:
 private:
     void Update();
     void Render();
-    void DrawAllMeshes(const decltype(registry.view<const Transform, const Mesh, Material>()) &model_view,
-                       Shader shader = LoadMaterialDefault().shader);
+    size_t DrawAllMeshes(const decltype(registry.view<const Transform, const Mesh, Material>()) &model_view,
+                         Frustum frustum,
+                         Shader shader = LoadMaterialDefault().shader);
 
     void ReloadGBuffers();
 };

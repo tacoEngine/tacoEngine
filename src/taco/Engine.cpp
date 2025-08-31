@@ -165,16 +165,23 @@ void Engine::Render() {
     ClearBackground(BLACK);
 
     Camera3D raylib_camera = {};
+    size_t drawn_meshes;
 
     for (auto [_, transform, cam] : camera_view.each()) {
         Vector3 camera_target = transform.position + Vector3RotateByQuaternion(
-            Vector3 {0, 0, -1},
-            transform.rotation.GetQuaternion());
+                                    Vector3 {0, 0, -1},
+                                    transform.rotation.GetQuaternion());
         raylib_camera = {transform.position, camera_target, {0, 1, 0}, cam.fov, CAMERA_PERSPECTIVE};
+
+        Frustum frustum = CreateFrustumFromCamera(raylib_camera,
+                                                  (float) GetRenderWidth() / (float) GetRenderHeight(),
+                                                  cam.fov,
+                                                  RL_CULL_DISTANCE_NEAR,
+                                                  RL_CULL_DISTANCE_FAR);
 
         BeginMode3D(raylib_camera);
 
-        DrawAllMeshes(model_view, GetGBufferShader());
+        drawn_meshes = DrawAllMeshes(model_view, frustum, GetGBufferShader());
 
         if (config_.debug_physics)
             physics_->Render();
@@ -214,7 +221,9 @@ void Engine::Render() {
 
             ClearBackground(BLANK);
 
-            DrawAllMeshes(model_view);
+            // 0 frustum draws all meshes
+            // fixme: create frustum from sun.shadow_map_.projections[i]
+            DrawAllMeshes(model_view, {});
 
             EndShadowMap();
         }
@@ -290,6 +299,8 @@ void Engine::Render() {
     DrawText(std::to_string(timings[5]).c_str(), 70, 150 + 12 * 5, 12, WHITE);
     DrawText(std::to_string(timings[6]).c_str(), 70, 150 + 12 * 6, 12, WHITE);
 
+    DrawText((std::to_string(drawn_meshes) + "/" + std::to_string(mesh_count_)).c_str(), 0, 250, 12, WHITE);
+
     for (auto [id, pool] : registry.storage()) {
         if (registry.storage(id)->type() != entt::type_id<std::shared_ptr<System>>())
             continue;
@@ -308,14 +319,32 @@ void Engine::Render() {
     running_ = !WindowShouldClose();
 }
 
-void Engine::DrawAllMeshes(const decltype(registry.view<const Transform, const Mesh, Material>()) &model_view,
-                           Shader shader) {
-    for (auto [_, transform, mesh, material] : model_view.each()) {
+size_t Engine::DrawAllMeshes(const decltype(registry.view<const Transform, const Mesh, Material>()) &model_view,
+                             Frustum frustum,
+                             Shader shader) {
+    size_t drawn_meshes = 0;
+    mesh_count_ = 0;
+    for (auto [ent, transform, mesh, material] : model_view.each()) {
         Matrix mat_translate = MatrixTranslate(transform.position.x, transform.position.y, transform.position.z);
         Matrix mat_rotate = QuaternionToMatrix(transform.rotation.GetQuaternion());
+        Matrix mat_model = MatrixMultiply(mat_rotate, mat_translate);
+
+        mesh_count_++;
+
+        auto *bb = registry.try_get<BoundingBox>(ent);
+        if (bb) {
+            BoundingBox transformed = TransformAABB(*bb, mat_model);
+            DrawBoundingBox(transformed, RED);
+            if (!IsAABBInFrustum(frustum, transformed)) {
+                continue;
+            }
+        }
         material.shader = shader;
-        DrawMesh(mesh, material, MatrixMultiply(mat_rotate, mat_translate));
+
+        DrawMesh(mesh, material, mat_model);
+        drawn_meshes++;
     }
+    return drawn_meshes;
 }
 
 void Engine::ReloadGBuffers() {
