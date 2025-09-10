@@ -1,4 +1,10 @@
-// game (c) Nikolas Wipper 2025
+// tacoEngine (c) Nikolas Wipper 2025
+
+/*
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/.
+ */
 
 #ifndef LIGHTS_H
 #define LIGHTS_H
@@ -12,13 +18,16 @@ class Sunlight {
     friend class Engine;
 
     ShadowMap shadow_map_ = {0};
-public:
 
+public:
     float intensity;
     Color color;
     bool shadow_casting;
 
-    Sunlight(float inten = 1.f, Color col = WHITE, bool sh = true) : intensity(inten), color(col), shadow_casting(sh) {}
+    Sunlight(float inten = 1.f, Color col = WHITE, bool sh = true)
+        : intensity(inten),
+          color(col),
+          shadow_casting(sh) {}
 };
 
 class Environment {
@@ -36,8 +45,8 @@ class Sky {
     friend class Engine;
 
     Skybox skybox_;
-public:
 
+public:
     Sky(const Image &image);
 };
 };
