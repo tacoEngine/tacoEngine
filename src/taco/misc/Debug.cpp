@@ -51,10 +51,15 @@ void taco::RaylibDebugRenderer::DrawLine(JPH::RVec3Arg inFrom, JPH::RVec3Arg inT
     DrawLine3D(torl(inFrom), torl(inTo), torl(inColor));
 }
 
-void taco::RaylibDebugRenderer::DrawTriangle(JPH::RVec3Arg inV1, JPH::RVec3Arg inV2, JPH::RVec3Arg inV3,
-                                       JPH::ColorArg inColor, ECastShadow inCastShadow) {
+void taco::RaylibDebugRenderer::DrawTriangle(JPH::RVec3Arg inV1,
+                                             JPH::RVec3Arg inV2,
+                                             JPH::RVec3Arg inV3,
+                                             JPH::ColorArg inColor,
+                                             ECastShadow inCastShadow) {
     DrawTriangle3D(torl(inV1), torl(inV2), torl(inV3), torl(inColor));
 }
 
-void taco::RaylibDebugRenderer::DrawText3D(JPH::RVec3Arg inPosition, const std::string_view &inString, JPH::ColorArg inColor,
-                                     float inHeight) {}
+void taco::RaylibDebugRenderer::DrawText3D(JPH::RVec3Arg inPosition,
+                                           const std::string_view &inString,
+                                           JPH::ColorArg inColor,
+                                           float inHeight) {}

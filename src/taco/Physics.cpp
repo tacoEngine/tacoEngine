@@ -22,8 +22,10 @@
 
 #include "misc/Log.h"
 
-taco::Collider::Collider(std::shared_ptr<PhysicsEngine> physics, JPH::BodyID body_id, Vector3 com) : body_id_(body_id),
-    physics_(std::move(physics)), com_(com) {}
+taco::Collider::Collider(std::shared_ptr<PhysicsEngine> physics, JPH::BodyID body_id, Vector3 com)
+    : body_id_(body_id),
+      physics_(std::move(physics)),
+      com_(com) {}
 
 void taco::Collider::SetPosition(Vector3 position) {
     JPH::RVec3 pos(position.x, position.y, position.z);
@@ -60,8 +62,9 @@ Vector3 taco::Collider::GetCenterOfMass() const {
     return com_;
 }
 
-taco::Character::Character(std::shared_ptr<PhysicsEngine> physics, std::unique_ptr<JPH::Character> character) :
-    physics_(std::move(physics)), character_(std::move(character)) {}
+taco::Character::Character(std::shared_ptr<PhysicsEngine> physics, std::unique_ptr<JPH::Character> character)
+    : character_(std::move(character)),
+      physics_(std::move(physics)) {}
 
 void taco::Character::SetPosition(Vector3 position) {
     JPH::RVec3 pos(position.x, position.y, position.z);
@@ -97,7 +100,8 @@ bool taco::Character::OnGround() const {
     return character_->IsSupported();
 }
 
-taco::PhysicsEngine::PhysicsEngine() : body_interface_(system_.GetBodyInterface()) {
+taco::PhysicsEngine::PhysicsEngine()
+    : body_interface_(system_.GetBodyInterface()) {
     // Startup physics
     JPH::RegisterDefaultAllocator();
 

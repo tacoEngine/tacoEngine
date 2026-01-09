@@ -12,7 +12,6 @@
 #include "taco/misc/Rotation.h"
 
 namespace taco {
-
 struct Transform {
     Vector3 position;
     Rotation rotation;
