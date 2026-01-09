@@ -27,6 +27,13 @@ taco::Collider::Collider(std::shared_ptr<PhysicsEngine> physics, JPH::BodyID bod
       physics_(std::move(physics)),
       com_(com) {}
 
+taco::Collider::~Collider() {
+    if (physics_) {
+        physics_->body_interface_.RemoveBody(body_id_);
+        physics_->body_interface_.DestroyBody(body_id_);
+    }
+}
+
 void taco::Collider::SetPosition(Vector3 position) {
     JPH::RVec3 pos(position.x, position.y, position.z);
     physics_->body_interface_.SetPosition(body_id_, pos, JPH::EActivation::DontActivate);
@@ -65,6 +72,12 @@ Vector3 taco::Collider::GetCenterOfMass() const {
 taco::Character::Character(std::shared_ptr<PhysicsEngine> physics, std::unique_ptr<JPH::Character> character)
     : character_(std::move(character)),
       physics_(std::move(physics)) {}
+
+taco::Character::~Character() {
+    if (physics_ && character_) {
+        physics_->body_interface_.RemoveBody(character_->GetBodyID());
+    }
+}
 
 void taco::Character::SetPosition(Vector3 position) {
     JPH::RVec3 pos(position.x, position.y, position.z);
