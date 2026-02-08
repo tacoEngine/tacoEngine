@@ -12,7 +12,16 @@
 #include <tr_generators.h>
 
 taco::Environment::Environment(const Image &image) {
-    Texture tex = LoadTextureCubemap(image, CUBEMAP_LAYOUT_AUTO_DETECT);
+    Texture tex;
+    if (image.format == PIXELFORMAT_UNCOMPRESSED_R32G32B32) {
+        Image copy = ImageCopy(image);
+        ImageFormat(&copy, PIXELFORMAT_UNCOMPRESSED_R16G16B16);
+        tex = LoadTextureCubemap(copy, CUBEMAP_LAYOUT_AUTO_DETECT);
+        UnloadImage(copy);
+    } else {
+
+        tex = LoadTextureCubemap(image, CUBEMAP_LAYOUT_AUTO_DETECT);
+    }
     radiance_ = PrefilterCubemap(tex);
     irradiance_ = IrradianceCubemap(tex);
 }
