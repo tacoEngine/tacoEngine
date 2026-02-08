@@ -14,6 +14,7 @@
 #include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
 #include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
 #include <Jolt/Physics/Collision/Shape/SphereShape.h>
+#include <Jolt/Physics/Collision/Shape/MeshShape.h>
 #include <Jolt/RegisterTypes.h>
 
 #include <log/log.h>
@@ -166,24 +167,46 @@ taco::Collider taco::PhysicsEngine::CreateSphereCollider(double radius) {
 }
 
 taco::Collider taco::PhysicsEngine::CreateMeshCollider(Mesh mesh, bool dynamic) {
-    JPH::ConvexHullShapeSettings settings;
+    JPH::ConvexHullShape::ShapeResult result;
+    JPH::Shape *shape;
 
     if (mesh.indices) {
-        JPH::Array<JPH::Vec3> points;
-        points.reserve(mesh.triangleCount * 3);
+        JPH::VertexList vertex_list;
+        vertex_list.reserve(mesh.vertexCount);
 
-        for (int i = 0; i < mesh.triangleCount * 3; i++) {
-            int index = mesh.indices[i];
-            points.emplace_back(mesh.vertices[index * 3], mesh.vertices[index * 3 + 1], mesh.vertices[index * 3 + 2]);
+        for (int i = 0; i < mesh.vertexCount * 3; i += 3) {
+            JPH::Float3 vertex(mesh.vertices[i + 0],mesh.vertices[i + 1],mesh.vertices[i + 2]);
+            vertex_list.push_back(vertex);
         }
-        // Construct the settings into the stack var, because there is neither a copy nor a move assignment operator
-        new(&settings) JPH::ConvexHullShapeSettings(points);
+
+        JPH::IndexedTriangleList triangle_list;
+        triangle_list.reserve(mesh.triangleCount);
+
+        for (int i = 0; i < mesh.triangleCount * 3; i+=3) {
+            JPH::IndexedTriangle triangle(mesh.indices[i + 0], mesh.indices[i + 1], mesh.indices[i + 2]);
+            triangle_list.push_back(triangle);
+        }
+
+        JPH::MeshShapeSettings settings(vertex_list, triangle_list);
+
+        shape = new JPH::MeshShape(settings, result);
     } else {
-        new(&settings) JPH::ConvexHullShapeSettings((JPH::Vec3 *) mesh.vertices, mesh.vertexCount);
+        JPH::TriangleList triangle_list;
+        triangle_list.reserve(mesh.triangleCount);
+
+        for (int i = 0; i < mesh.vertexCount * 3; i += 9) {
+            JPH::Float3 vertex1(mesh.vertices[i + 0],mesh.vertices[i + 1],mesh.vertices[i + 2]);
+            JPH::Float3 vertex2(mesh.vertices[i + 3],mesh.vertices[i + 4],mesh.vertices[i + 5]);
+            JPH::Float3 vertex3(mesh.vertices[i + 6],mesh.vertices[i + 7],mesh.vertices[i + 8]);
+            triangle_list.emplace_back(vertex1, vertex2, vertex3);
+        }
+
+        JPH::MeshShapeSettings settings(triangle_list);
+
+        shape = new JPH::MeshShape(settings, result);
     }
 
-    JPH::ConvexHullShape::ShapeResult result;
-    JPH::BodyCreationSettings sphere_settings(new JPH::ConvexHullShape(settings, result),
+    JPH::BodyCreationSettings sphere_settings(shape,
                                               JPH::RVec3(0.0, 0.0, 0.0),
                                               JPH::Quat::sIdentity(),
                                               dynamic ? JPH::EMotionType::Dynamic : JPH::EMotionType::Static,
