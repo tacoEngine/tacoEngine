@@ -238,7 +238,7 @@ void Engine::Render() {
         timers[1].Stop();
         timers[2].Start();
 
-        FilterShadowMap(sun.shadow_map_, config_.shadow_map_quality);
+        FilterShadowMap(sun.shadow_map_, config_.shadow_map_quality, 1);
 
         timers[2].Stop();
     }
