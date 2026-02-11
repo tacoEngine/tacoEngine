@@ -146,7 +146,7 @@ void Engine::Update() {
 
 void Engine::Render() {
     static Timer timers[7];
-    float timings[7] = {0.0f};
+    std::array<float, 7> timings = {0.0f};
 
     if (!timers[0].query) {
         for (auto &timer : timers) {
@@ -297,6 +297,13 @@ void Engine::Render() {
     DrawText("Lighting", 0, 150 + 12 * 4, 12, WHITE);
     DrawText("PP", 0, 150 + 12 * 5, 12, WHITE);
     DrawText("Blit", 0, 150 + 12 * 6, 12, WHITE);
+    DrawText("Total", 0, 150 + 12 * 7, 12, WHITE);
+    DrawText("FPS", 0, 150 + 12 * 8, 12, WHITE);
+    DrawText("Unacc", 0, 150 + 12 * 9, 12, WHITE);
+
+    float total_time = std::accumulate(timings.begin(), timings.end(), 0.0);
+    float fps = 1000.0 / total_time;
+    float real_time = GetFrameTime();
 
     DrawText(std::to_string(timings[0]).c_str(), 70, 150 + 12 * 0, 12, WHITE);
     DrawText(std::to_string(timings[1]).c_str(), 70, 150 + 12 * 1, 12, WHITE);
@@ -305,8 +312,12 @@ void Engine::Render() {
     DrawText(std::to_string(timings[4]).c_str(), 70, 150 + 12 * 4, 12, WHITE);
     DrawText(std::to_string(timings[5]).c_str(), 70, 150 + 12 * 5, 12, WHITE);
     DrawText(std::to_string(timings[6]).c_str(), 70, 150 + 12 * 6, 12, WHITE);
+    DrawText(std::to_string(total_time).c_str(), 70, 150 + 12 * 7, 12, WHITE);
+    DrawText(std::to_string(fps).c_str(), 70, 150 + 12 * 8, 12, WHITE);
+    if (total_time < real_time)
+    DrawText(std::to_string(real_time - total_time).c_str(), 70, 150 + 12 * 9, 12, WHITE);
 
-    DrawText((std::to_string(drawn_meshes) + "/" + std::to_string(mesh_count_)).c_str(), 0, 250, 12, WHITE);
+    DrawText((std::to_string(drawn_meshes) + "/" + std::to_string(mesh_count_)).c_str(), 0, 300, 12, WHITE);
 
     for (auto [id, pool] : registry.storage()) {
         if (registry.storage(id)->type() != entt::type_id<std::shared_ptr<System>>())
@@ -317,11 +328,9 @@ void Engine::Render() {
         }
     }
 
-    rlDrawRenderBatchActive();
+    EndDrawing();
 
     timers[6].Stop();
-
-    EndDrawing();
 
     running_ = !WindowShouldClose();
 }
