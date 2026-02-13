@@ -21,6 +21,8 @@ public:
 
     Quaternion GetQuaternion() const;
     void SetFromQuaternion(Quaternion quaternion);
+
+    Vector3 GetDirection() const;
 };
 } // taco
 

@@ -27,4 +27,8 @@ void Rotation::SetFromQuaternion(Quaternion q) {
     y = euler.y;
     z = euler.z;
 }
+
+Vector3 Rotation::GetDirection() const {
+    return Vector3RotateByQuaternion(Vector3 {0, 0, -1}, GetQuaternion());
+}
 } // taco

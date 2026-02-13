@@ -175,9 +175,7 @@ void Engine::Render() {
     size_t drawn_meshes;
 
     for (auto [_, transform, cam] : camera_view.each()) {
-        Vector3 camera_target = transform.position + Vector3RotateByQuaternion(
-                                    Vector3 {0, 0, -1},
-                                    transform.rotation.GetQuaternion());
+        Vector3 camera_target = transform.position + transform.rotation.GetDirection();
         raylib_camera = {transform.position, camera_target, {0, 1, 0}, cam.fov, CAMERA_PERSPECTIVE};
 
         Frustum frustum = CreateFrustumFromCamera(raylib_camera,
