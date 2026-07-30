@@ -15,6 +15,7 @@
 
 #include <raylib.h>
 #include <raymath.h>
+#include <rlgl.h>
 #include <entt/core/hashed_string.hpp>
 
 #include "Engine.h"
@@ -56,6 +57,44 @@ void GetBool3(const Value &v, const char *key, bool &x, bool &y, bool &z) {
     x = a[0].GetBool();
     y = a[1].GetBool();
     z = a[2].GetBool();
+}
+
+Mesh GenNamedMesh(const std::string &type, const Value &v) {
+    if (type == "sphere")
+        return GenMeshSphere(GetFloat(v, "radius", 1.f),
+                             (int) GetFloat(v, "rings", 20), (int) GetFloat(v, "slices", 20));
+    if (type == "plane") {
+        const Vector3 s = GetVec3(v, "size", {1, 1, 1});
+        return GenMeshPlane(s.x, s.z, (int) GetFloat(v, "resX", 1), (int) GetFloat(v, "resZ", 1));
+    }
+    const Vector3 s = GetVec3(v, "size", {1, 1, 1}); // default: cube
+    return GenMeshCube(s.x, s.y, s.z);
+}
+
+Texture2D SolidTexture(Color c) {
+    return LoadTextureFromImage(GenImageColor(1, 1, c));
+}
+
+void FinishMaterial(Material &mat) {
+    mat.shader = GetGBufferShader();
+    GenTextureMipmaps(&mat.maps[MATERIAL_MAP_ALBEDO].texture);
+    GenTextureMipmaps(&mat.maps[MATERIAL_MAP_NORMAL].texture);
+    SetTextureFilter(mat.maps[MATERIAL_MAP_ALBEDO].texture, TEXTURE_FILTER_TRILINEAR);
+    SetTextureFilter(mat.maps[MATERIAL_MAP_ALBEDO].texture, TEXTURE_FILTER_ANISOTROPIC_16X);
+    SetTextureFilter(mat.maps[MATERIAL_MAP_NORMAL].texture, TEXTURE_FILTER_TRILINEAR);
+    SetTextureFilter(mat.maps[MATERIAL_MAP_NORMAL].texture, TEXTURE_FILTER_ANISOTROPIC_16X);
+}
+
+Texture2D MapTexture(taco::Loader &l, const Value &v, const char *field, Color fallback) {
+    if (v.HasMember(field)) {
+        const Value &f = v[field];
+        if (f.IsString()) {
+            Texture2D t = LoadTexture(l.Path(f.GetString()).c_str());
+            return t.id == 0 ? SolidTexture(fallback) : t;
+        }
+        if (f.IsArray()) return SolidTexture(GetColor(f, fallback));
+    }
+    return SolidTexture(fallback);
 }
 }
 
@@ -209,7 +248,43 @@ void Loader::RegisterBuiltins() {
         }
     });
 
-    // Mesh and Material are registered in Task 4.
+    RegisterComponent("Mesh", [](Loader &l, entt::entity e, const Value &v) {
+        Mesh mesh = {};
+        if (v.HasMember("generate")) {
+            mesh = GenNamedMesh(v["generate"].GetString(), v);
+            if (v.HasMember("offset")) {
+                const Vector3 off = GetVec3(v, "offset", {0, 0, 0});
+                for (int i = 0; i < mesh.vertexCount; i++) {
+                    mesh.vertices[i * 3 + 0] += off.x;
+                    mesh.vertices[i * 3 + 1] += off.y;
+                    mesh.vertices[i * 3 + 2] += off.z;
+                }
+                rlUnloadVertexArray(mesh.vaoId);
+                if (mesh.vboId) for (int i = 0; i < 9; i++) rlUnloadVertexBuffer(mesh.vboId[i]);
+                mesh.vaoId = 0;
+                UploadMesh(&mesh, false);
+            }
+        } else if (v.HasMember("model")) {
+            Model m = LoadModel(l.Path(v["model"].GetString()).c_str());
+            mesh = m.meshes[(int) GetFloat(v, "meshIndex", 0)];
+        }
+        if (mesh.tangents == nullptr) GenMeshTangents(&mesh);
+        l.engine().registry.emplace<Mesh>(e, mesh);
+        if (!l.engine().registry.all_of<BoundingBox>(e))
+            l.engine().registry.emplace<BoundingBox>(e, GetMeshBoundingBox(mesh));
+    });
+
+    RegisterComponent("Material", [](Loader &l, entt::entity e, const Value &v) {
+        Material mat = LoadMaterialDefault();
+        mat.maps[MATERIAL_MAP_ALBEDO].texture    = MapTexture(l, v, "albedo",    LIGHTGRAY);
+        mat.maps[MATERIAL_MAP_NORMAL].texture    = MapTexture(l, v, "normal",    Color{128, 128, 255, 255});
+        mat.maps[MATERIAL_MAP_METALNESS].texture = MapTexture(l, v, "metalness", WHITE);
+        mat.maps[MATERIAL_MAP_ROUGHNESS].texture = MapTexture(l, v, "roughness", Color{217, 217, 217, 255});
+        mat.maps[MATERIAL_MAP_EMISSION].texture  = MapTexture(l, v, "emission",  BLACK);
+        mat.maps[MATERIAL_MAP_OCCLUSION].texture = MapTexture(l, v, "occlusion", WHITE);
+        FinishMaterial(mat);
+        l.engine().registry.emplace<Material>(e, mat);
+    });
 }
 
 void Loader::ExpandModel(const Value &) {}
