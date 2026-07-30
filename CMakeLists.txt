@@ -29,6 +29,8 @@ set(TACO_SOURCES
         src/taco/Engine.cpp
         src/taco/Engine.h
         src/taco/Graphics.h
+        src/taco/Loader.cpp
+        src/taco/Loader.h
         src/taco/Physics.cpp
         src/taco/Physics.h
         src/taco/misc/Rotation.cpp
@@ -39,3 +41,4 @@ add_library(tacoEngine ${TACO_SOURCES})
 
 target_link_libraries(tacoEngine EnTT::EnTT tacoRender yal Jolt)
 target_include_directories(tacoEngine PUBLIC src)
+target_include_directories(tacoEngine PRIVATE ext/rapidjson/include)
