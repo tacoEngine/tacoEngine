@@ -18,6 +18,9 @@
 #include <entt/core/hashed_string.hpp>
 
 #include "Engine.h"
+#include "comp/Camera.h"
+#include "comp/Lights.h"
+#include "comp/Transform.h"
 
 namespace {
 using Value = rapidjson::Value;
@@ -149,6 +152,65 @@ void Loader::AttachSystems(entt::entity entity, const Value &list) {
             attach(it->name.GetString(), it->value);
 }
 
-void Loader::RegisterBuiltins() {}
+void Loader::RegisterBuiltins() {
+    RegisterComponent("Transform", [](Loader &l, entt::entity e, const Value &v) {
+        const Vector3 pos = GetVec3(v, "position", {0, 0, 0});
+        const Vector3 rot = GetVec3(v, "rotation", {0, 0, 0});
+        const Vector3 vel = GetVec3(v, "velocity", {0, 0, 0});
+        l.engine().registry.emplace<Transform>(
+            e, pos, Rotation(rot.x * DEG2RAD, rot.y * DEG2RAD, rot.z * DEG2RAD), vel);
+    });
+
+    RegisterComponent("Camera", [](Loader &l, entt::entity e, const Value &v) {
+        l.engine().registry.emplace<Camera>(e, GetFloat(v, "fov", 72.f));
+    });
+
+    RegisterComponent("Sunlight", [](Loader &l, entt::entity e, const Value &v) {
+        const float intensity = GetFloat(v, "intensity", 1.f);
+        const Color color = v.HasMember("color") ? GetColor(v["color"], WHITE) : WHITE;
+        const bool shadow = GetBool(v, "shadow", true);
+        l.engine().registry.emplace<Sunlight>(e, intensity, color, shadow);
+    });
+
+    RegisterComponent("Environment", [](Loader &l, entt::entity e, const Value &v) {
+        Image img = LoadImage(l.Path(v["hdr"].GetString()).c_str());
+        l.engine().registry.emplace<Environment>(e, img);
+        UnloadImage(img);
+    });
+
+    RegisterComponent("Sky", [](Loader &l, entt::entity e, const Value &v) {
+        Image img = LoadImage(l.Path(v["hdr"].GetString()).c_str());
+        l.engine().registry.emplace<Sky>(e, img);
+        UnloadImage(img);
+    });
+
+    RegisterComponent("Link", [](Loader &l, entt::entity e, const Value &v) {
+        const entt::entity target = l.Resolve(v["target"].GetString());
+        bool px, py, pz, rx, ry, rz, vx, vy, vz;
+        GetBool3(v, "pos", px, py, pz);
+        GetBool3(v, "rot", rx, ry, rz);
+        GetBool3(v, "vel", vx, vy, vz);
+        l.engine().registry.emplace<Link>(e, target, px, py, pz, rx, ry, rz, vx, vy, vz);
+    });
+
+    RegisterComponent("Character", [](Loader &l, entt::entity e, const Value &v) {
+        l.engine().registry.emplace<Character>(
+            e, l.engine().GetPhysics()->CreateCharacter(GetFloat(v, "height", 1.8f),
+                                                        GetFloat(v, "radius", 0.2f)));
+    });
+
+    RegisterComponent("Collider", [](Loader &l, entt::entity e, const Value &v) {
+        auto physics = l.engine().GetPhysics();
+        if (v.HasMember("sphere")) {
+            l.engine().registry.emplace<Collider>(e, physics->CreateSphereCollider(v["sphere"].GetFloat()));
+        } else if (GetBool(v, "mesh", false)) {
+            Mesh &m = l.engine().registry.get<Mesh>(e);
+            l.engine().registry.emplace<Collider>(e, physics->CreateMeshCollider(m, GetBool(v, "dynamic", true)));
+        }
+    });
+
+    // Mesh and Material are registered in Task 4.
+}
+
 void Loader::ExpandModel(const Value &) {}
 }
