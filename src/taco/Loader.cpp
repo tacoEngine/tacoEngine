@@ -96,6 +96,27 @@ Texture2D MapTexture(taco::Loader &l, const Value &v, const char *field, Color f
     }
     return SolidTexture(fallback);
 }
+
+void FixModelMaterial(Material &mat) {
+    auto &maps = mat.maps;
+    if (maps[MATERIAL_MAP_ALBEDO].texture.id == rlGetTextureIdDefault())
+        maps[MATERIAL_MAP_ALBEDO].texture.id = 0;
+
+    if (maps[MATERIAL_MAP_ALBEDO].texture.id == 0)
+        maps[MATERIAL_MAP_ALBEDO].texture = LoadTextureFromImage(GenImageColor(4, 4, LIGHTGRAY));
+    if (maps[MATERIAL_MAP_NORMAL].texture.id == 0)
+        maps[MATERIAL_MAP_NORMAL].texture = SolidTexture(Color{128, 128, 255, 255});
+    if (maps[MATERIAL_MAP_METALNESS].texture.id == 0)
+        maps[MATERIAL_MAP_METALNESS].texture = SolidTexture(WHITE);
+    if (maps[MATERIAL_MAP_ROUGHNESS].texture.id == 0)
+        maps[MATERIAL_MAP_ROUGHNESS].texture = SolidTexture(Color{217, 217, 217, 255});
+    if (maps[MATERIAL_MAP_EMISSION].texture.id == 0)
+        maps[MATERIAL_MAP_EMISSION].texture = SolidTexture(BLACK);
+    if (maps[MATERIAL_MAP_OCCLUSION].texture.id == 0)
+        maps[MATERIAL_MAP_OCCLUSION].texture = SolidTexture(WHITE);
+
+    FinishMaterial(mat);
+}
 }
 
 namespace taco {
@@ -287,5 +308,39 @@ void Loader::RegisterBuiltins() {
     });
 }
 
-void Loader::ExpandModel(const Value &) {}
+void Loader::ExpandModel(const Value &spec) {
+    Model model = LoadModel(Path(spec["model"].GetString()).c_str());
+
+    for (int i = 0; i < model.materialCount; i++)
+        FixModelMaterial(model.materials[i]);
+
+    for (int i = 0; i < model.meshCount; i++) {
+        const entt::entity e = engine_.registry.create();
+
+        Mesh mesh = model.meshes[i];
+        // ponytail: GLTF-provided tangents are kept; only meshes lacking tangents
+        // get them generated (the path main.cpp commented out for this model — watch
+        // the map's normal mapping after this change).
+        if (mesh.tangents == nullptr) GenMeshTangents(&mesh);
+
+        if (spec.HasMember("Transform"))
+            components_["Transform"](*this, e, spec["Transform"]);
+        else
+            engine_.registry.emplace<Transform>(e, Vector3{0, 0, 0}, Rotation(), Vector3{0, 0, 0});
+
+        engine_.registry.emplace<Mesh>(e, mesh);
+        engine_.registry.emplace<BoundingBox>(e, GetMeshBoundingBox(mesh));
+        engine_.registry.emplace<Material>(e, model.materials[model.meshMaterial[i]]);
+
+        // Apply the remaining components (e.g. Collider) to each sub-mesh entity.
+        for (auto it = spec.MemberBegin(); it != spec.MemberEnd(); ++it) {
+            const std::string key = it->name.GetString();
+            if (key == "model" || key == "systems" || key == "Transform" ||
+                key == "Mesh" || key == "Material")
+                continue;
+            auto f = components_.find(key);
+            if (f != components_.end()) f->second(*this, e, it->value);
+        }
+    }
+}
 }
