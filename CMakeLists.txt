@@ -29,6 +29,8 @@ set(TACO_SOURCES
         src/taco/Engine.cpp
         src/taco/Engine.h
         src/taco/Graphics.h
+        src/taco/Loader.cpp
+        src/taco/Loader.h
         src/taco/Physics.cpp
         src/taco/Physics.h
         src/taco/misc/Rotation.cpp
@@ -39,3 +41,8 @@ add_library(tacoEngine ${TACO_SOURCES})
 
 target_link_libraries(tacoEngine EnTT::EnTT tacoRender yal Jolt)
 target_include_directories(tacoEngine PUBLIC src)
+# rapidjson is exposed by the public Loader.h header, so consumers need it too.
+target_include_directories(tacoEngine PUBLIC ext/rapidjson/include)
+
+add_executable(tacoLoaderTest src/taco/loader_test.cpp)
+target_link_libraries(tacoLoaderTest tacoEngine)
