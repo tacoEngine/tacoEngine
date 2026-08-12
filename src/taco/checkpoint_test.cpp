@@ -19,7 +19,8 @@ int main() {
     const char *scene =
         "{ \"entities\": {"
         "  \"ball\": { \"Transform\": {\"position\":[0,10,0]},"
-        "              \"Collider\": {\"sphere\": 1.0} }"
+        "              \"Collider\": {\"sphere\": 1.0} },"
+        "  \"doomed\": { \"Transform\": {\"position\":[5,5,5]} }"
         "} }";
     { std::ofstream out("checkpoint_test_scene.json"); out << scene; }
 
@@ -29,6 +30,8 @@ int main() {
 
     const entt::entity ball = loader.Resolve("ball");
     assert(ball != entt::null);
+    const entt::entity doomed = loader.Resolve("doomed");
+    assert(doomed != entt::null && doomed != ball);
 
     taco::Checkpoint cp = engine.Save();
 
@@ -37,11 +40,17 @@ int main() {
     const entt::entity spawned = engine.registry.create();
     engine.registry.emplace<taco::Transform>(spawned, Vector3{1, 1, 1}, taco::Rotation(), Vector3{0, 0, 0});
 
+    // A captured entity destroyed since the capture cannot come back. Restoring must
+    // survive its stale handle (emplace_or_replace asserts on invalid entities, and a
+    // recycled index would otherwise be written into) and still restore the rest.
+    engine.registry.destroy(doomed);
+
     engine.Restore(cp);
 
     const taco::Transform &t = engine.registry.get<taco::Transform>(ball);
     assert(t.position.x == 0 && t.position.y == 10 && t.position.z == 0);
     assert(!engine.registry.valid(spawned));
+    assert(!engine.registry.valid(doomed));
 
     // A checkpoint is reusable.
     engine.registry.get<taco::Transform>(ball).position = {1, 1, 1};

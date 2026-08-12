@@ -80,8 +80,11 @@ public:
                     if (!data.count(entity)) stale.push_back(entity);
                 for (const entt::entity entity : stale) reg.remove<T>(entity);
 
+                // Entities destroyed since the capture stay destroyed: their handle is
+                // stale, and its index may already have been recycled into a different
+                // live entity. Restore diagnoses this; here we just skip it.
                 for (const auto &[entity, component] : data)
-                    reg.emplace_or_replace<T>(entity, component);
+                    if (reg.valid(entity)) reg.emplace_or_replace<T>(entity, component);
             });
         };
     }
