@@ -56,6 +56,13 @@ Checkpoint Engine::Save() {
     return cp;
 }
 
+// A System phase hook is the only place game code holds an Engine *, but Restore
+// destroys entities and rewrites the shared_ptr<System> storages that Update is
+// iterating right then. So systems queue the restore and Run applies it after Update.
+void Engine::RequestRestore(Checkpoint &cp) {
+    pending_restore_ = &cp;
+}
+
 void Engine::Restore(Checkpoint &cp) {
     // Entities spawned after the capture go first: their Collider/Character
     // destructors remove the Jolt bodies, so the body set matches the recorder.

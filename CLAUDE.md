@@ -12,7 +12,7 @@ submodules. For the renderer internals see **[docs/tacoRender.md](docs/tacoRende
 src/taco/
   Engine.{h,cpp}      # main loop, deferred render orchestration, system dispatch
   Physics.{h,cpp}     # Jolt wrapper: PhysicsEngine, Collider, Character, layers
-  Checkpoint.{h,cpp}   # in-memory state snapshot + restore
+  Checkpoint.{h,cpp}  # in-memory state snapshot + restore
   Config.h            # render/quality settings struct (hot-swappable)
   Graphics.h          # just re-exports <tacoRender.h>
   comp/               # ECS components (plain structs unless noted)
@@ -122,10 +122,12 @@ engine back to it. In-memory only, valid for the current run, and reusable.
 - Systems opt in by overriding `System::Clone()` (default `nullptr` = state kept).
 - `Restore` destroys entities spawned since the capture; entities *destroyed* since
   cannot come back (their GPU/Jolt handles are gone) and are logged as an error.
-- Call `Save`/`Restore` between frames only — never from inside a `System` phase hook
-  (`Restore` destroys entities and erases/emplaces into the `shared_ptr<System>`
-  storages `Engine::Update`'s `visit_systems` is iterating) and never during the
-  physics step.
+- Call `Restore` directly only from outside the loop (before `Run`, or after it returns).
+  From inside a `System` phase hook use `RequestRestore(cp)`: it queues the checkpoint
+  and `Run` applies it at the end of that frame's `Update`. A direct `Restore` there
+  would destroy entities and erase/emplace into the `shared_ptr<System>` storages that
+  `Engine::Update`'s `visit_systems` is iterating right then, and never call either
+  during the physics step.
 
 ## Gotchas worth remembering
 

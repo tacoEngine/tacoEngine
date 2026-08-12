@@ -119,6 +119,12 @@ int main() {
     assert(std::fabs(body2.y - 10.f) < 0.001f);
     assert(std::fabs(body2.z) < 0.001f);
 
+    // RequestRestore only queues; Run() applies it after Update. No loop runs here,
+    // so the registry must be untouched and the mutation still readable.
+    engine.registry.get<taco::Transform>(ball).position = {7, 7, 7};
+    engine.RequestRestore(cp);
+    assert(engine.registry.get<taco::Transform>(ball).position.y == 7);
+
     std::remove("checkpoint_test_scene.json");
     printf("checkpoint test: ok\n");
 }

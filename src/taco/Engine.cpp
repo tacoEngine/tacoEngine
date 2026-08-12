@@ -80,6 +80,13 @@ void Engine::Run() {
         input_.UpdateFromLocalInput();
 
         Update();
+
+        // Now that no system iteration is live, apply a restore a system asked for.
+        // Clear first, so a system re-requesting during the restored frame survives.
+        if (Checkpoint *pending = pending_restore_) {
+            pending_restore_ = nullptr;
+            Restore(*pending);
+        }
     }
 }
 

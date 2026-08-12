@@ -40,6 +40,7 @@ class Engine {
 
     std::map<entt::id_type, std::function<void(const entt::registry &, Checkpoint &)>> tracked_;
     std::set<entt::id_type> ignored_;
+    Checkpoint *pending_restore_ = nullptr;
 
     GBuffers gbuffers_;
     GBufferPresenter presenter_;
@@ -63,6 +64,8 @@ public:
     Checkpoint Save();
     /// Reset the engine back to cp. Non-const: the Jolt recorders need Rewind().
     void Restore(Checkpoint &cp);
+    /// Queue cp to be restored at the end of this frame's Update. cp must outlive it.
+    void RequestRestore(Checkpoint &cp);
 
     /// Register a component type for checkpointing. Engine components are
     /// registered in the constructor; game components need one call each.
