@@ -45,7 +45,8 @@ Engine::Engine() {
 void Engine::Run() {
     running_ = true;
 
-    std::chrono::steady_clock::time_point last_frame = std::chrono::steady_clock::now();
+    std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
+    std::chrono::steady_clock::time_point last_frame = start;
 
     while (running_) {
         Render();
@@ -55,6 +56,11 @@ void Engine::Run() {
         std::chrono::duration<int64_t, std::nano> frame_delta = now - last_frame;
         delta_time_ = frame_delta.count();
         last_frame = now;
+
+        // Render() polls the window, so this is the freshest input state.
+        std::chrono::duration<int64_t, std::nano> elapsed = now - start;
+        input_.SetTime(elapsed.count());
+        input_.UpdateFromLocalInput();
 
         Update();
     }
@@ -374,6 +380,10 @@ std::shared_ptr<PhysicsEngine> Engine::GetPhysics() const {
 
 double Engine::GetDeltaTime() const {
     return (double) delta_time_ / (double) std::nano::den;
+}
+
+Input &Engine::GetInput() {
+    return input_;
 }
 
 Config Engine::SwapConfig(Config con) {

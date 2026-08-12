@@ -35,6 +35,8 @@ set(TACO_SOURCES
         src/taco/Physics.h
         src/taco/misc/Rotation.cpp
         src/taco/misc/Rotation.h
+        src/taco/input/Input.cpp
+        src/taco/input/Input.h
 )
 
 add_library(tacoEngine ${TACO_SOURCES})
@@ -46,3 +48,6 @@ target_include_directories(tacoEngine PUBLIC ext/rapidjson/include)
 
 add_executable(tacoLoaderTest src/taco/loader_test.cpp)
 target_link_libraries(tacoLoaderTest tacoEngine)
+
+add_executable(tacoInputTest src/taco/input/input_test.cpp)
+target_link_libraries(tacoInputTest tacoEngine)

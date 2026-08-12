@@ -15,6 +15,7 @@
 
 #include "comp/Transform.h"
 #include "Config.h"
+#include "input/Input.h"
 #include "misc/Debug.h"
 #include "Physics.h"
 #include "tr_math.h"
@@ -30,6 +31,7 @@ class Engine {
     std::shared_ptr<PhysicsEngine> physics_;
     std::unique_ptr<RaylibDebugRenderer> debug_renderer_;
     Config config_;
+    Input input_;
 
     GBuffers gbuffers_;
     GBufferPresenter presenter_;
@@ -45,6 +47,7 @@ public:
 
     std::shared_ptr<PhysicsEngine> GetPhysics() const;
     double GetDeltaTime() const;
+    Input &GetInput();
 
     Config SwapConfig(Config con);
 
