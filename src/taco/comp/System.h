@@ -9,6 +9,8 @@
 #ifndef SYSTEM_H
 #define SYSTEM_H
 
+#include <memory>
+
 #include <entt/entt.hpp>
 
 namespace taco {
@@ -21,6 +23,11 @@ public:
     virtual void UpdatePostPhysics(Engine *engine, entt::entity entity) {}
     virtual void UpdateLate(Engine *engine, entt::entity entity) {}
     virtual void UpdateUI(Engine *engine, entt::entity entity) {}
+
+    /// Return a copy of this system to make its state part of a Checkpoint.
+    /// The default (nullptr) means the system keeps its state across a restore.
+    /// Override with: return std::make_shared<MySystem>(*this);
+    virtual std::shared_ptr<System> Clone() const { return nullptr; }
 };
 }
 

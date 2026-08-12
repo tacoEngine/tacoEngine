@@ -10,10 +10,21 @@
 #include <cstdio>
 #include <fstream>
 
+#include <entt/core/hashed_string.hpp>
+
 #include "taco/Checkpoint.h"
 #include "taco/Engine.h"
 #include "taco/Loader.h"
+#include "taco/comp/System.h"
 #include "taco/comp/Transform.h"
+
+struct CountSystem : taco::System {
+    int value = 0;
+
+    std::shared_ptr<taco::System> Clone() const override {
+        return std::make_shared<CountSystem>(*this);
+    }
+};
 
 int main() {
     const char *scene =
@@ -30,6 +41,14 @@ int main() {
 
     const entt::entity ball = loader.Resolve("ball");
     assert(ball != entt::null);
+
+    // Systems live in named storages, exactly like Loader::AttachSystems creates them.
+    auto &system_storage =
+        engine.registry.storage<std::shared_ptr<taco::System>>(entt::hashed_string{"CountSystem"});
+    const auto counter = std::make_shared<CountSystem>();
+    system_storage.emplace(ball, counter);
+    counter->value = 5;
+
     const entt::entity doomed = loader.Resolve("doomed");
     assert(doomed != entt::null && doomed != ball);
 
@@ -37,6 +56,7 @@ int main() {
 
     // Component data changes, plus an entity that did not exist at capture.
     engine.registry.get<taco::Transform>(ball).position = {9, 9, 9};
+    counter->value = 99;
     const entt::entity spawned = engine.registry.create();
     engine.registry.emplace<taco::Transform>(spawned, Vector3{1, 1, 1}, taco::Rotation(), Vector3{0, 0, 0});
 
@@ -51,6 +71,12 @@ int main() {
     assert(t.position.x == 0 && t.position.y == 10 && t.position.z == 0);
     assert(!engine.registry.valid(spawned));
     assert(!engine.registry.valid(doomed));
+
+    // The clone is a fresh object; the original pointer is replaced, not mutated.
+    const auto &restored =
+        static_cast<CountSystem &>(*engine.registry.storage<std::shared_ptr<taco::System>>(
+            entt::hashed_string{"CountSystem"}).get(ball));
+    assert(restored.value == 5);
 
     // A checkpoint is reusable.
     engine.registry.get<taco::Transform>(ball).position = {1, 1, 1};

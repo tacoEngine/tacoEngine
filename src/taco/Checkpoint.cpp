@@ -22,6 +22,18 @@ Checkpoint Engine::Save() {
     for (auto &[_, capture] : tracked_)
         capture(registry, cp);
 
+    // Systems live in one named storage per system name, so scan every storage
+    // holding shared_ptr<System> — the same walk Engine::Update's visit_systems does.
+    for (auto [id, pool] : registry.storage()) {
+        if (pool.type() != entt::type_id<std::shared_ptr<System>>())
+            continue;
+
+        auto system_view = entt::basic_view{registry.storage<std::shared_ptr<System>>(id)};
+        for (auto [entity, system] : system_view.each())
+            if (std::shared_ptr<System> clone = system->Clone())
+                cp.systems_.emplace_back(id, entity, std::move(clone));
+    }
+
     for (const entt::entity entity : registry.view<entt::entity>())
         cp.entities_.push_back(entity);
 
@@ -44,5 +56,14 @@ void Engine::Restore(Checkpoint &cp) {
 
     for (auto &restore : cp.restore_)
         restore(registry);
+
+    for (const auto &[id, entity, system] : cp.systems_) {
+        if (!registry.valid(entity)) continue;
+
+        auto &storage = registry.storage<std::shared_ptr<System>>(id);
+        if (storage.contains(entity)) storage.erase(entity);
+        // Clone again so the checkpoint stays usable for the next restore.
+        storage.emplace(entity, system->Clone());
+    }
 }
 }
