@@ -7,6 +7,7 @@
  */
 
 #include <cassert>
+#include <cmath>
 #include <cstdio>
 #include <fstream>
 
@@ -15,6 +16,7 @@
 #include "taco/Checkpoint.h"
 #include "taco/Engine.h"
 #include "taco/Loader.h"
+#include "taco/Physics.h"
 #include "taco/comp/System.h"
 #include "taco/comp/Transform.h"
 
@@ -52,10 +54,13 @@ int main() {
     const entt::entity doomed = loader.Resolve("doomed");
     assert(doomed != entt::null && doomed != ball);
 
+    engine.registry.get<taco::Collider>(ball).SetPosition({0, 10, 0});
+
     taco::Checkpoint cp = engine.Save();
 
     // Component data changes, plus an entity that did not exist at capture.
     engine.registry.get<taco::Transform>(ball).position = {9, 9, 9};
+    engine.registry.get<taco::Collider>(ball).SetPosition({9, 9, 9});
     counter->value = 99;
     const entt::entity spawned = engine.registry.create();
     engine.registry.emplace<taco::Transform>(spawned, Vector3{1, 1, 1}, taco::Rotation(), Vector3{0, 0, 0});
@@ -71,6 +76,11 @@ int main() {
     assert(t.position.x == 0 && t.position.y == 10 && t.position.z == 0);
     assert(!engine.registry.valid(spawned));
     assert(!engine.registry.valid(doomed));
+
+    const Vector3 body = engine.registry.get<taco::Collider>(ball).GetPosition();
+    assert(std::fabs(body.x) < 0.001f);
+    assert(std::fabs(body.y - 10.f) < 0.001f);
+    assert(std::fabs(body.z) < 0.001f);
 
     // The clone is a fresh object; the original pointer is replaced, not mutated.
     const auto &restored =

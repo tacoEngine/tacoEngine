@@ -14,6 +14,7 @@
 #include <log/log.h>
 
 #include "Engine.h"
+#include "Physics.h"
 
 namespace taco {
 Checkpoint Engine::Save() {
@@ -36,6 +37,12 @@ Checkpoint Engine::Save() {
 
     for (const entt::entity entity : registry.view<entt::entity>())
         cp.entities_.push_back(entity);
+
+    // Jolt's own rollback support: global state, bodies, contacts and constraints.
+    physics_->system_.SaveState(cp.physics_);
+
+    for (auto [entity, character] : registry.view<Character>().each())
+        character.character_->SaveState(cp.characters_[entity]);
 
     return cp;
 }
@@ -64,6 +71,17 @@ void Engine::Restore(Checkpoint &cp) {
         if (storage.contains(entity)) storage.erase(entity);
         // Clone again so the checkpoint stays usable for the next restore.
         storage.emplace(entity, system->Clone());
+    }
+
+    cp.physics_.Rewind();
+    if (!physics_->system_.RestoreState(cp.physics_))
+        logging::Logger::Error("[checkpoint]: failed to restore the physics state");
+
+    for (auto &[entity, recorder] : cp.characters_) {
+        if (!registry.valid(entity) || !registry.all_of<Character>(entity)) continue;
+
+        recorder.Rewind();
+        registry.get<Character>(entity).character_->RestoreState(recorder);
     }
 }
 }
