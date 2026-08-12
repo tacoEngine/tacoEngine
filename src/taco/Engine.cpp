@@ -40,6 +40,23 @@ Engine::Engine() {
     debug_renderer_ = std::make_unique<RaylibDebugRenderer>();
 
     ReloadGBuffers();
+
+    Track<Transform>();
+    Track<Link>();
+    Track<Camera>();
+    Track<Mesh>();
+    Track<Material>();
+    Track<BoundingBox>();
+    Track<Sunlight>();
+    Track<Environment>();
+    Track<Sky>();
+
+    // Not copyable, and not needed: the entity storage is the registry's own,
+    // Collider/Character state comes from Jolt, systems from System::Clone.
+    Ignore<entt::entity>();
+    Ignore<Collider>();
+    Ignore<Character>();
+    Ignore<std::shared_ptr<System>>();
 }
 
 void Engine::Run() {
