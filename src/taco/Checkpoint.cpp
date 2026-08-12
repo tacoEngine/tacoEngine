@@ -73,15 +73,27 @@ void Engine::Restore(Checkpoint &cp) {
         storage.emplace(entity, system->Clone());
     }
 
+    // A changed body set is only partly detectable, and that is an accepted ceiling here:
+    // BodyManager::RestoreState just walks the stream, so (a) a Collider destroyed since
+    // the capture aborts it midway — the bodies it already visited keep the restored state,
+    // the rest keep the current one, and nothing rolls back; (b) a Character destroyed since
+    // the capture leaves its Jolt body alive (~Character only removes it), so old state is
+    // written into an orphaned body with no error at all; (c) a body added since the capture
+    // is simply absent from the stream and silently keeps its current state.
+    // Rewind() is seekg(0, beg): it clears eofbit but not failbit, and a failed stream reads
+    // as zero bodies, which RestoreState reports as success — so check IsFailed() too.
     cp.physics_.Rewind();
-    if (!physics_->system_.RestoreState(cp.physics_))
+    if (!physics_->system_.RestoreState(cp.physics_) || cp.physics_.IsFailed())
         logging::Logger::Error("[checkpoint]: failed to restore the physics state");
 
     for (auto &[entity, recorder] : cp.characters_) {
         if (!registry.valid(entity) || !registry.all_of<Character>(entity)) continue;
 
         recorder.Rewind();
+        // Character::RestoreState returns nothing, so the stream state is the only signal.
         registry.get<Character>(entity).character_->RestoreState(recorder);
+        if (recorder.IsFailed())
+            logging::Logger::Error("[checkpoint]: failed to restore a character state");
     }
 }
 }

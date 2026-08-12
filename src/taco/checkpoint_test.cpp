@@ -90,8 +90,15 @@ int main() {
 
     // A checkpoint is reusable.
     engine.registry.get<taco::Transform>(ball).position = {1, 1, 1};
+    engine.registry.get<taco::Collider>(ball).SetPosition({1, 1, 1});
     engine.Restore(cp);
     assert(engine.registry.get<taco::Transform>(ball).position.y == 10);
+
+    // Rewind() has to leave the recorder readable, so the body must come back a second time.
+    const Vector3 body2 = engine.registry.get<taco::Collider>(ball).GetPosition();
+    assert(std::fabs(body2.x) < 0.001f);
+    assert(std::fabs(body2.y - 10.f) < 0.001f);
+    assert(std::fabs(body2.z) < 0.001f);
 
     std::remove("checkpoint_test_scene.json");
     printf("checkpoint test: ok\n");
