@@ -28,6 +28,14 @@ struct CountSystem : taco::System {
     }
 };
 
+struct Untracked {
+    int value;
+};
+
+struct Tracked {
+    int value;
+};
+
 int main() {
     const char *scene =
         "{ \"entities\": {"
@@ -56,12 +64,21 @@ int main() {
 
     engine.registry.get<taco::Collider>(ball).SetPosition({0, 10, 0});
 
+    // Not registered with Track<>: Save must warn, and the value must not restore.
+    engine.registry.emplace<Untracked>(ball, 1);
+
+    // Registered with Track<>: proves Track<T>() works end to end.
+    engine.Track<Tracked>();
+    engine.registry.emplace<Tracked>(ball, 1);
+
     taco::Checkpoint cp = engine.Save();
 
     // Component data changes, plus an entity that did not exist at capture.
     engine.registry.get<taco::Transform>(ball).position = {9, 9, 9};
     engine.registry.get<taco::Collider>(ball).SetPosition({9, 9, 9});
     counter->value = 99;
+    engine.registry.get<Untracked>(ball).value = 2;
+    engine.registry.get<Tracked>(ball).value = 2;
     const entt::entity spawned = engine.registry.create();
     engine.registry.emplace<taco::Transform>(spawned, Vector3{1, 1, 1}, taco::Rotation(), Vector3{0, 0, 0});
 
@@ -76,6 +93,8 @@ int main() {
     assert(t.position.x == 0 && t.position.y == 10 && t.position.z == 0);
     assert(!engine.registry.valid(spawned));
     assert(!engine.registry.valid(doomed));
+    assert(engine.registry.get<Untracked>(ball).value == 2);
+    assert(engine.registry.get<Tracked>(ball).value == 1);
 
     const Vector3 body = engine.registry.get<taco::Collider>(ball).GetPosition();
     assert(std::fabs(body.x) < 0.001f);

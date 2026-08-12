@@ -12,6 +12,7 @@ submodules. For the renderer internals see **[docs/tacoRender.md](docs/tacoRende
 src/taco/
   Engine.{h,cpp}      # main loop, deferred render orchestration, system dispatch
   Physics.{h,cpp}     # Jolt wrapper: PhysicsEngine, Collider, Character, layers
+  Checkpoint.{h,cpp}   # in-memory state snapshot + restore
   Config.h            # render/quality settings struct (hot-swappable)
   Graphics.h          # just re-exports <tacoRender.h>
   comp/               # ECS components (plain structs unless noted)
@@ -108,6 +109,24 @@ hello-world filter setup). `Update(dt)` runs `ceil((1/60)/dt)` collision substep
   removes+destroys the body. Get/Set position, rotation (quaternion), velocity;
   `Character::OnGround()` = `IsSupported()`.
 
+## Checkpointing (`Checkpoint.{h,cpp}`)
+
+`Engine::Save()` returns a move-only `Checkpoint`; `Engine::Restore(cp)` resets the
+engine back to it. In-memory only, valid for the current run, and reusable.
+
+- Component data is copied per registered type. The engine registers its own nine
+  components in its constructor; game components need one `engine.Track<T>()` call,
+  and `Save` warns about any storage that is neither tracked nor `Ignore<T>()`d.
+- `Collider`/`Character` are not copied: Jolt's own `PhysicsSystem::SaveState` /
+  `RestoreState` and `CharacterBase::SaveState` carry the simulation state.
+- Systems opt in by overriding `System::Clone()` (default `nullptr` = state kept).
+- `Restore` destroys entities spawned since the capture; entities *destroyed* since
+  cannot come back (their GPU/Jolt handles are gone) and are logged as an error.
+- Call `Save`/`Restore` between frames only — never from inside a `System` phase hook
+  (`Restore` destroys entities and erases/emplaces into the `shared_ptr<System>`
+  storages `Engine::Update`'s `visit_systems` is iterating) and never during the
+  physics step.
+
 ## Gotchas worth remembering
 
 - **Render runs before Update** each frame.
@@ -117,3 +136,4 @@ hello-world filter setup). `Update(dt)` runs `ceil((1/60)/dt)` collision substep
 - `Rotation` is euler radians with a cached quaternion; `SetFromQuaternion` writes euler and
   lets the cache lazily recompute.
 - `accumulator_` is unused; `delta_time_`'s `0.0f` initialiser is cosmetic (it's int64 ns).
+- A `Checkpoint` aliases GPU handles by value — it is only valid for the run that made it.

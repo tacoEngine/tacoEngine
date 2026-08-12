@@ -20,6 +20,15 @@ namespace taco {
 Checkpoint Engine::Save() {
     Checkpoint cp;
 
+    // A component nobody registered would silently not restore. Say so.
+    for (auto [id, pool] : registry.storage()) {
+        const entt::id_type type = pool.type().hash();
+        if (tracked_.count(type) || ignored_.count(type)) continue;
+
+        logging::Logger::Warning("[checkpoint]: untracked component " + std::string(pool.type().name())
+                                 + ", call Engine::Track<T>() to include it");
+    }
+
     for (auto &[_, capture] : tracked_)
         capture(registry, cp);
 
