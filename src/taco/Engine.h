@@ -40,6 +40,8 @@ class Engine {
 
     std::map<entt::id_type, std::function<void(const entt::registry &, Checkpoint &)>> tracked_;
     std::set<entt::id_type> ignored_;
+    /// Types WarnUntracked has already named, so it says each one once.
+    std::set<entt::id_type> warned_;
     Checkpoint *pending_restore_ = nullptr;
     /// Handles taken off destroyed entities so Restore can hand them back. See Checkpoint.cpp.
     std::map<entt::entity, Collider> retired_colliders_;
@@ -112,8 +114,8 @@ public:
     }
 
 private:
-    /// Warn about every storage that is neither tracked nor ignored.
-    void WarnUntracked() const;
+    /// Warn about every storage that is neither tracked nor ignored, once per type.
+    void WarnUntracked();
     /// Track<T> for Sunlight, minus its GPU-owning shadow_map_. See Checkpoint.cpp.
     void TrackSunlight();
     /// on_destroy hooks: park the Jolt body instead of destroying it. See Checkpoint.cpp.

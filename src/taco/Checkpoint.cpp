@@ -19,12 +19,16 @@
 
 namespace taco {
 // A component nobody registered would silently not restore. Say so. EnTT only creates a
-// storage on first use, so a type with no live instance yet has no storage and cannot be
-// warned about at Save time — hence the same scan runs again in Restore.
-void Engine::WarnUntracked() const {
+// storage on first use and never drops it, so a type first emplaced after a capture has no
+// storage to find at Save time — hence the same scan runs again in Restore.
+// A missing Track<T>() is one fact about the code, not about this call: warn once per type,
+// or a Save per frame turns it into a wall. Empty storages say nothing, and every storage
+// ever created stays in the registry, so they are skipped rather than reported forever.
+void Engine::WarnUntracked() {
     for (auto [id, pool] : registry.storage()) {
         const entt::id_type type = pool.type().hash();
-        if (tracked_.count(type) || ignored_.count(type)) continue;
+        if (pool.empty() || tracked_.count(type) || ignored_.count(type) || !warned_.insert(type).second)
+            continue;
 
         logging::Logger::Warning("[checkpoint]: untracked component " + std::string(pool.type().name())
                                  + ", call Engine::Track<T>() to include it");

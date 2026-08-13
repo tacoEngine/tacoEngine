@@ -116,7 +116,8 @@ engine back to it. In-memory only, valid for the current run, and reusable.
 
 - Component data is copied per registered type. The engine registers its own nine
   components in its constructor; game components need one `engine.Track<T>()` call,
-  and `Save` warns about any storage that is neither tracked nor `Ignore<T>()`d.
+  and `Save`/`Restore` warn about any non-empty storage that is neither tracked nor
+  `Ignore<T>()`d — once per type, since a per-frame `Save` would otherwise flood the log.
 - `Collider`/`Character` are not copied: Jolt's own `PhysicsSystem::SaveState` /
   `RestoreState` and `CharacterBase::SaveState` carry the simulation state.
 - **Destroying a physics entity after the first `Save` does not destroy its Jolt body.**
