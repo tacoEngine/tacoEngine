@@ -127,7 +127,9 @@ engine back to it. In-memory only, valid for the current run, and reusable.
   and `shadow_casting` round-trip. Its `shadow_map_` owns a GL fbo and heap arrays that
   `Render` unloads on a config change, so restoring a saved copy would double-free them.
 - `Restore` destroys entities spawned since the capture; entities *destroyed* since
-  cannot come back (their GPU/Jolt handles are gone) and are logged as an error.
+  cannot come back (their GPU/Jolt handles are gone) and are logged as an error. A `Link`
+  restored onto such a target is written back as-is, and the next `Update` reads an invalid
+  entity — the `Link` loop does not guard, by design.
 - Call `Restore` directly only from outside the loop (before `Run`, or after it returns).
   From inside a `System` phase hook use `RequestRestore(cp)`: it queues the checkpoint
   and `Run` applies it (via `ApplyPendingRestore`) at the end of that frame's `Update`.

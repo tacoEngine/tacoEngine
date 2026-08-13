@@ -139,10 +139,6 @@ void Engine::Update() {
     }
 
     for (auto [_, link, transform] : link_view.each()) {
-        // The target can be gone — destroyed by the game, or by a Checkpoint restore that
-        // wrote back a Link pointing at an entity destroyed since the capture.
-        if (!registry.valid(link.entity)) continue;
-
         auto &remote_transform = registry.get<Transform>(link.entity);
 
         if (link.linkPosX)

@@ -70,7 +70,9 @@ public:
     /// either owner can be freed mid-Restore, taking the Checkpoint with it.
     void RequestRestore(Checkpoint &cp);
     /// Apply a restore queued with RequestRestore, if any. Called by Run() after Update();
-    /// exposed so a manually driven loop can do the same.
+    /// exposed so a manually driven loop can do the same. Never call it from a System hook —
+    /// it runs Restore, which rewrites the very storages Update is iterating. That is what
+    /// RequestRestore is for.
     void ApplyPendingRestore();
 
     /// Register a component type for checkpointing. Engine components are
