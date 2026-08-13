@@ -12,6 +12,7 @@
 #include <memory>
 #include <ratio>
 
+#include <log/log.h>
 #include <raylib.h>
 #include <raymath.h>
 #include <tr_effects.h>
@@ -69,6 +70,163 @@ Engine::~Engine() {
     // Parked bodies outlive their entities by design, so nothing else frees them. The
     // registry is destroyed after this and never fires on_destroy, so no new ones appear.
     ClearRetired();
+}
+
+// A component nobody registered would silently not restore. Say so. EnTT only creates a
+// storage on first use and never drops it, so a type first emplaced after a capture has no
+// storage to find at Save time — hence the same scan runs again in Restore.
+// A missing Track<T>() is one fact about the code, not about this call: warn once per type,
+// or a Save per frame turns it into a wall. Empty storages say nothing, and every storage
+// ever created stays in the registry, so they are skipped rather than reported forever.
+void Engine::WarnUntracked() {
+    for (auto [id, pool] : registry.storage()) {
+        const entt::id_type type = pool.type().hash();
+        if (pool.empty() || tracked_.count(type) || ignored_.count(type) || !warned_.insert(type).second)
+            continue;
+
+        logging::Logger::Warning("[checkpoint]: untracked component " + std::string(pool.type().name())
+                                 + ", call Engine::Track<T>() to include it");
+    }
+}
+
+// Sunlight cannot go through the generic Track<T>: its shadow_map_ owns a GL fbo plus four
+// heap arrays that Engine::Render unloads and reallocates whenever shadow_map_size or
+// shadow_casting changes. Writing a saved copy back would reinstall already-freed handles
+// and the next Render would free them a second time. So only the public value fields
+// round-trip, assigned onto the live component; shadow_map_ is left alone.
+// Unlike Track<T>, this does not remove Sunlight from entities that gained it after the
+// capture — removing it would leak the shadow map, which has no destructor.
+void Engine::TrackSunlight() {
+    tracked_[entt::type_id<Sunlight>().hash()] = [](const entt::registry &registry, Checkpoint &cp) {
+        std::map<entt::entity, std::tuple<float, Color, bool>> data;
+        for (auto [entity, sun] : registry.view<const Sunlight>().each())
+            data.emplace(entity, std::tuple {sun.intensity, sun.color, sun.shadow_casting});
+
+        cp.restore_.emplace_back([data = std::move(data)](entt::registry &reg) {
+            for (const auto &[entity, values] : data) {
+                if (!reg.valid(entity) || !reg.all_of<Sunlight>(entity)) continue;
+                Sunlight &sun = reg.get<Sunlight>(entity);
+                std::tie(sun.intensity, sun.color, sun.shadow_casting) = values;
+            }
+        });
+    };
+}
+
+// A Jolt body cannot be rebuilt from a checkpoint — its shape, its mass overrides and its
+// body id all die with it — so a destroyed physics entity does not destroy its body. It only
+// leaves the broad phase and its handle is parked here until a Restore hands it back.
+// BodyManager::SaveState skips bodies that are not in the broad phase, so a parked body is
+// invisible to every later checkpoint and costs no simulation time.
+// Moving the handle out empties its physics_, which is exactly what ~Collider tests, so the
+// husk left behind on the entity destructs without touching the body.
+// The key cannot collide: a parked handle only becomes reachable again through Restore, which
+// takes it out of the map on the way.
+// Before the first Save there is nothing to be restored to, so destruction stays destruction
+// and a game that never checkpoints never pays for any of this.
+void Engine::RetireCollider(entt::registry &reg, const entt::entity entity) {
+    if (!checkpointed_) return;
+
+    Collider &collider = reg.get<Collider>(entity);
+    physics_->body_interface_.RemoveBody(collider.body_id_);
+    retired_colliders_.emplace(entity, std::move(collider));
+}
+
+void Engine::RetireCharacter(entt::registry &reg, const entt::entity entity) {
+    if (!checkpointed_) return;
+
+    Character &character = reg.get<Character>(entity);
+    physics_->body_interface_.RemoveBody(character.character_->GetBodyID());
+    retired_characters_.emplace(entity, std::move(character));
+}
+
+// Dropping a parked handle takes care: ~Collider and ~Character both remove the body from
+// the broad phase, and a parked body is already out — Jolt rejects the second removal. So
+// destroy the body here and empty the handle, which is what both destructors no-op on.
+// ~JPH::Character destroys the character's body itself, so that one only needs disarming.
+void Engine::ClearRetired() {
+    for (auto &[entity, collider] : retired_colliders_) {
+        physics_->body_interface_.DestroyBody(collider.body_id_);
+        collider.physics_.reset();
+    }
+    retired_colliders_.clear();
+
+    for (auto &[entity, character] : retired_characters_)
+        character.physics_.reset();
+    retired_characters_.clear();
+}
+
+// Hand the parked bodies back, and destroy whatever is left over — those handles belong to
+// entities this checkpoint never saw, so it can never revive them. Both halves have to happen
+// after the entities are back and before RestorePhysics: a revived body must be in the broad
+// phase for the stream to find it, and a leftover must be gone before the stream is replayed.
+void Engine::HandBackRetired(const Checkpoint &cp) {
+    for (auto &[entity, collider] : retired_colliders_) {
+        if (cp.colliders_.count(entity) && registry.valid(entity) && !registry.all_of<Collider>(entity)) {
+            // The body kept its id, shape and mass the whole time; RestoreState sets the
+            // rest, including whether it is awake, so it goes back in deactivated.
+            physics_->body_interface_.AddBody(collider.body_id_, JPH::EActivation::DontActivate);
+            registry.emplace<Collider>(entity, std::move(collider));
+        } else {
+            physics_->body_interface_.DestroyBody(collider.body_id_);
+            collider.physics_.reset();
+        }
+    }
+    retired_colliders_.clear();
+
+    for (auto &[entity, character] : retired_characters_) {
+        if (cp.characters_.count(entity) && registry.valid(entity) && !registry.all_of<Character>(entity)) {
+            character.character_->AddToPhysicsSystem(JPH::EActivation::DontActivate);
+            registry.emplace<Character>(entity, std::move(character));
+        } else {
+            character.physics_.reset(); // ~JPH::Character still destroys the body
+        }
+    }
+    retired_characters_.clear();
+}
+
+Checkpoint Engine::Save() {
+    WarnUntracked();
+
+    // Nothing parked before this capture can be brought back by it: the entity is not in
+    // entities_, so Restore would drop the handle anyway. Retiring only starts here, which
+    // is also why a game that never checkpoints never pays for it.
+    ClearRetired();
+    checkpointed_ = true;
+
+    Checkpoint cp;
+    for (auto &[_, capture] : tracked_)
+        capture(registry, cp);
+    cp.CaptureECS(registry);
+    cp.CapturePhysics(*physics_, registry);
+
+    return cp;
+}
+
+void Engine::Restore(Checkpoint &cp) {
+    // A type first emplaced after the capture has no storage at Save time, so this is the
+    // only place its missing Track<T>() can be reported.
+    WarnUntracked();
+
+    cp.RestoreECS(registry);
+    HandBackRetired(cp);
+    cp.RestorePhysics(*physics_, registry);
+}
+
+// A System phase hook is the only place game code holds an Engine *, but Restore
+// destroys entities and rewrites the shared_ptr<System> storages that Update is
+// iterating right then. So systems queue the restore and Run applies it after Update.
+void Engine::RequestRestore(Checkpoint &cp) {
+    pending_restore_ = &cp;
+}
+
+void Engine::ApplyPendingRestore() {
+    // Clear first: the pointer must not survive the restore it triggered, or the next
+    // frame would restore again. Restore itself never runs systems, so nothing can
+    // re-request in between.
+    if (Checkpoint *pending = pending_restore_) {
+        pending_restore_ = nullptr;
+        Restore(*pending);
+    }
 }
 
 void Engine::Run() {

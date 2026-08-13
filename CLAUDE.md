@@ -12,7 +12,7 @@ submodules. For the renderer internals see **[docs/tacoRender.md](docs/tacoRende
 src/taco/
   Engine.{h,cpp}      # main loop, deferred render orchestration, system dispatch
   Physics.{h,cpp}     # Jolt wrapper: PhysicsEngine, Collider, Character, layers
-  Checkpoint.{h,cpp}  # in-memory state snapshot + restore
+  Checkpoint.{h,cpp}  # the snapshot itself: capture/restore of its own ECS + Jolt data
   Config.h            # render/quality settings struct (hot-swappable)
   Graphics.h          # just re-exports <tacoRender.h>
   comp/               # ECS components (plain structs unless noted)
@@ -109,10 +109,16 @@ hello-world filter setup). `Update(dt)` runs `ceil((1/60)/dt)` collision substep
   removes+destroys the body. Get/Set position, rotation (quaternion), velocity;
   `Character::OnGround()` = `IsSupported()`.
 
-## Checkpointing (`Checkpoint.{h,cpp}`)
+## Checkpointing (`Checkpoint.{h,cpp}` + `Engine.cpp`)
 
 `Engine::Save()` returns a move-only `Checkpoint`; `Engine::Restore(cp)` resets the
 engine back to it. In-memory only, valid for the current run, and reusable.
+
+Split by ownership: `Checkpoint` captures and puts back its own data
+(`CaptureECS`/`RestoreECS`, `CapturePhysics`/`RestorePhysics`, all private, `Engine` is a
+friend). `Engine` owns the policy and the sequencing — which types are tracked, the
+untracked warning, the parked bodies — and lives in `Engine.cpp`. The two physics halves
+are separate calls because `Engine::HandBackRetired` has to run between them.
 
 - Component data is copied per registered type. The engine registers its own nine
   components in its constructor; game components need one `engine.Track<T>()` call,

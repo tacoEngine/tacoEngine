@@ -112,6 +112,7 @@ class Character;
 
 class PhysicsEngine : public std::enable_shared_from_this<PhysicsEngine> {
     friend class Engine;
+    friend class Checkpoint;
     friend class Collider;
     friend class Character;
 
@@ -169,6 +170,7 @@ public:
 class Character {
     friend class PhysicsEngine;
     friend class Engine;
+    friend class Checkpoint;
 
     std::unique_ptr<JPH::Character> character_;
     std::shared_ptr<PhysicsEngine> physics_;

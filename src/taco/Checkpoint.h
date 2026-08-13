@@ -24,6 +24,8 @@
 #include "comp/System.h"
 
 namespace taco {
+class PhysicsEngine;
+
 /// In-memory snapshot of the engine state. Move-only (JPH::StateRecorderImpl is),
 /// reusable, and only valid for the run that produced it: it aliases GPU handles
 /// and Jolt body ids by value. Reusable up to the first failure: Rewind() does not
@@ -44,6 +46,16 @@ class Checkpoint {
     std::set<entt::entity> colliders_;
     /// Keyed by entity so iteration order cannot cross-apply state between characters.
     std::map<entt::entity, JPH::StateRecorderImpl> characters_;
+
+    /// The half a checkpoint can capture and put back by itself: which entities exist,
+    /// and the systems that opt into cloning. Component values come from Engine::Track<T>,
+    /// which is where the list of tracked types lives.
+    void CaptureECS(const entt::registry &registry);
+    void RestoreECS(entt::registry &registry);
+    /// The Jolt simulation. Split from the ECS half because Engine has to hand the bodies
+    /// it parked at destroy time back between the two.
+    void CapturePhysics(PhysicsEngine &physics, const entt::registry &registry);
+    void RestorePhysics(PhysicsEngine &physics, const entt::registry &registry);
 
 public:
     Checkpoint() = default;

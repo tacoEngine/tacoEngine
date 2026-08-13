@@ -123,6 +123,8 @@ private:
     void RetireCharacter(entt::registry &reg, entt::entity entity);
     /// Destroy every parked body. Runs at Save and at teardown.
     void ClearRetired();
+    /// Return the parked bodies cp knows to their entities; destroy the rest.
+    void HandBackRetired(const Checkpoint &cp);
 
     void Update();
     void Render();
