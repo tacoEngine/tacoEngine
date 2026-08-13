@@ -64,8 +64,14 @@ public:
     Checkpoint Save();
     /// Reset the engine back to cp. Non-const: the Jolt recorders need Rewind().
     void Restore(Checkpoint &cp);
-    /// Queue cp to be restored at the end of this frame's Update. cp must outlive it.
+    /// Queue cp to be restored at the end of this frame's Update. cp must be owned by
+    /// something Restore cannot destroy — not by a System and not by an entity: Restore
+    /// destroys entities spawned since the capture and erases system storage entries, so
+    /// either owner can be freed mid-Restore, taking the Checkpoint with it.
     void RequestRestore(Checkpoint &cp);
+    /// Apply a restore queued with RequestRestore, if any. Called by Run() after Update();
+    /// exposed so a manually driven loop can do the same.
+    void ApplyPendingRestore();
 
     /// Register a component type for checkpointing. Engine components are
     /// registered in the constructor; game components need one call each.
@@ -99,6 +105,11 @@ public:
     }
 
 private:
+    /// Warn about every storage that is neither tracked nor ignored.
+    void WarnUntracked() const;
+    /// Track<T> for Sunlight, minus its GPU-owning shadow_map_. See Checkpoint.cpp.
+    void TrackSunlight();
+
     void Update();
     void Render();
     size_t DrawAllMeshes(const decltype(registry.view<const Transform, const Mesh, Material>()) &model_view,

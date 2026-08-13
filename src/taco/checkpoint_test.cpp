@@ -17,6 +17,7 @@
 #include "taco/Engine.h"
 #include "taco/Loader.h"
 #include "taco/Physics.h"
+#include "taco/comp/Lights.h"
 #include "taco/comp/System.h"
 #include "taco/comp/Transform.h"
 
@@ -41,6 +42,8 @@ int main() {
         "{ \"entities\": {"
         "  \"ball\": { \"Transform\": {\"position\":[0,10,0]},"
         "              \"Collider\": {\"sphere\": 1.0} },"
+        "  \"walker\": { \"Transform\": {\"position\":[20,10,0]},"
+        "                \"Character\": {\"height\": 1.8, \"radius\": 0.2} },"
         "  \"doomed\": { \"Transform\": {\"position\":[5,5,5]} }"
         "} }";
     { std::ofstream out("checkpoint_test_scene.json"); out << scene; }
@@ -59,6 +62,10 @@ int main() {
     system_storage.emplace(ball, counter);
     counter->value = 5;
 
+    const entt::entity walker = loader.Resolve("walker");
+    assert(walker != entt::null);
+    engine.registry.get<taco::Character>(walker).SetPosition({20, 10, 0});
+
     const entt::entity doomed = loader.Resolve("doomed");
     assert(doomed != entt::null && doomed != ball);
 
@@ -71,12 +78,31 @@ int main() {
     engine.Track<Tracked>();
     engine.registry.emplace<Tracked>(ball, 1);
 
+    // Sunlight has a hand-written capture (its shadow_map_ must not round-trip);
+    // this proves that one is registered and restores the value fields.
+    engine.registry.emplace<taco::Sunlight>(ball, 2.f, WHITE, true);
+
+    // Step first: SetPosition never activates a body, so without this the physics
+    // assertions below would only ever cover a sleeping body with zero velocity.
+    for (int i = 0; i < 10; i++)
+        engine.GetPhysics()->Update(1.0 / 60.0);
+
+    const Vector3 saved_pos = engine.registry.get<taco::Collider>(ball).GetPosition();
+    const Vector3 saved_vel = engine.registry.get<taco::Collider>(ball).GetVelocity();
+    const Vector3 saved_walker = engine.registry.get<taco::Character>(walker).GetPosition();
+    assert(saved_pos.y < 10.f && saved_vel.y < -0.1f); // it really is falling
+
     taco::Checkpoint cp = engine.Save();
 
     // Component data changes, plus an entity that did not exist at capture.
     engine.registry.get<taco::Transform>(ball).position = {9, 9, 9};
     engine.registry.get<taco::Collider>(ball).SetPosition({9, 9, 9});
+    engine.registry.get<taco::Character>(walker).SetPosition({0, 0, 0});
+    for (int i = 0; i < 10; i++)
+        engine.GetPhysics()->Update(1.0 / 60.0);
     counter->value = 99;
+    engine.registry.get<taco::Sunlight>(ball).intensity = 9.f;
+    engine.registry.get<taco::Sunlight>(ball).shadow_casting = false;
     engine.registry.get<Untracked>(ball).value = 2;
     engine.registry.get<Tracked>(ball).value = 2;
     const entt::entity spawned = engine.registry.create();
@@ -95,11 +121,16 @@ int main() {
     assert(!engine.registry.valid(doomed));
     assert(engine.registry.get<Untracked>(ball).value == 2);
     assert(engine.registry.get<Tracked>(ball).value == 1);
+    assert(engine.registry.get<taco::Sunlight>(ball).intensity == 2.f);
+    assert(engine.registry.get<taco::Sunlight>(ball).shadow_casting);
 
-    const Vector3 body = engine.registry.get<taco::Collider>(ball).GetPosition();
-    assert(std::fabs(body.x) < 0.001f);
-    assert(std::fabs(body.y - 10.f) < 0.001f);
-    assert(std::fabs(body.z) < 0.001f);
+    // Not just the position: a live body's velocity has to rewind as well.
+    auto close = [](Vector3 a, Vector3 b) {
+        return std::fabs(a.x - b.x) < 0.001f && std::fabs(a.y - b.y) < 0.001f && std::fabs(a.z - b.z) < 0.001f;
+    };
+    assert(close(engine.registry.get<taco::Collider>(ball).GetPosition(), saved_pos));
+    assert(close(engine.registry.get<taco::Collider>(ball).GetVelocity(), saved_vel));
+    assert(close(engine.registry.get<taco::Character>(walker).GetPosition(), saved_walker));
 
     // The clone is a fresh object; the original pointer is replaced, not mutated.
     const auto &restored =
@@ -110,19 +141,36 @@ int main() {
     // A checkpoint is reusable.
     engine.registry.get<taco::Transform>(ball).position = {1, 1, 1};
     engine.registry.get<taco::Collider>(ball).SetPosition({1, 1, 1});
+    engine.registry.get<taco::Character>(walker).SetPosition({1, 1, 1});
+    engine.registry.get<Tracked>(ball).value = 3;
     engine.Restore(cp);
     assert(engine.registry.get<taco::Transform>(ball).position.y == 10);
+    assert(engine.registry.get<Tracked>(ball).value == 1);
 
     // Rewind() has to leave the recorder readable, so the body must come back a second time.
-    const Vector3 body2 = engine.registry.get<taco::Collider>(ball).GetPosition();
-    assert(std::fabs(body2.x) < 0.001f);
-    assert(std::fabs(body2.y - 10.f) < 0.001f);
-    assert(std::fabs(body2.z) < 0.001f);
+    assert(close(engine.registry.get<taco::Collider>(ball).GetPosition(), saved_pos));
+    assert(close(engine.registry.get<taco::Collider>(ball).GetVelocity(), saved_vel));
+    assert(close(engine.registry.get<taco::Character>(walker).GetPosition(), saved_walker));
 
-    // RequestRestore only queues; Run() applies it after Update. No loop runs here,
-    // so the registry must be untouched and the mutation still readable.
+    // The second Restore erased that storage slot, so `restored` above now dangles:
+    // re-fetch. Cloning a clone has to work too, or a checkpoint is single-use.
+    const auto &restored2 =
+        static_cast<CountSystem &>(*engine.registry.storage<std::shared_ptr<taco::System>>(
+            entt::hashed_string{"CountSystem"}).get(ball));
+    assert(restored2.value == 5);
+
+    // RequestRestore only queues; the drain runs in ApplyPendingRestore, which Run()
+    // calls after Update. Nothing must happen until then.
     engine.registry.get<taco::Transform>(ball).position = {7, 7, 7};
     engine.RequestRestore(cp);
+    assert(engine.registry.get<taco::Transform>(ball).position.y == 7);
+
+    engine.ApplyPendingRestore();
+    assert(engine.registry.get<taco::Transform>(ball).position.y == 10);
+
+    // And the queue is empty again: a second drain must be a no-op.
+    engine.registry.get<taco::Transform>(ball).position = {7, 7, 7};
+    engine.ApplyPendingRestore();
     assert(engine.registry.get<taco::Transform>(ball).position.y == 7);
 
     std::remove("checkpoint_test_scene.json");

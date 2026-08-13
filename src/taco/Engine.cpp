@@ -47,7 +47,8 @@ Engine::Engine() {
     Track<Mesh>();
     Track<Material>();
     Track<BoundingBox>();
-    Track<Sunlight>();
+    // Not Track<Sunlight>(): its shadow_map_ owns GPU/heap handles Render frees. See Checkpoint.cpp.
+    TrackSunlight();
     Track<Environment>();
     Track<Sky>();
 
@@ -82,11 +83,7 @@ void Engine::Run() {
         Update();
 
         // Now that no system iteration is live, apply a restore a system asked for.
-        // Clear first, so a system re-requesting during the restored frame survives.
-        if (Checkpoint *pending = pending_restore_) {
-            pending_restore_ = nullptr;
-            Restore(*pending);
-        }
+        ApplyPendingRestore();
     }
 }
 
@@ -142,6 +139,10 @@ void Engine::Update() {
     }
 
     for (auto [_, link, transform] : link_view.each()) {
+        // The target can be gone — destroyed by the game, or by a Checkpoint restore that
+        // wrote back a Link pointing at an entity destroyed since the capture.
+        if (!registry.valid(link.entity)) continue;
+
         auto &remote_transform = registry.get<Transform>(link.entity);
 
         if (link.linkPosX)

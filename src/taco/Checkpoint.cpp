@@ -15,12 +15,13 @@
 
 #include "Engine.h"
 #include "Physics.h"
+#include "comp/Lights.h"
 
 namespace taco {
-Checkpoint Engine::Save() {
-    Checkpoint cp;
-
-    // A component nobody registered would silently not restore. Say so.
+// A component nobody registered would silently not restore. Say so. EnTT only creates a
+// storage on first use, so a type with no live instance yet has no storage and cannot be
+// warned about at Save time — hence the same scan runs again in Restore.
+void Engine::WarnUntracked() const {
     for (auto [id, pool] : registry.storage()) {
         const entt::id_type type = pool.type().hash();
         if (tracked_.count(type) || ignored_.count(type)) continue;
@@ -28,6 +29,35 @@ Checkpoint Engine::Save() {
         logging::Logger::Warning("[checkpoint]: untracked component " + std::string(pool.type().name())
                                  + ", call Engine::Track<T>() to include it");
     }
+}
+
+// Sunlight cannot go through the generic Track<T>: its shadow_map_ owns a GL fbo plus four
+// heap arrays that Engine::Render unloads and reallocates whenever shadow_map_size or
+// shadow_casting changes. Writing a saved copy back would reinstall already-freed handles
+// and the next Render would free them a second time. So only the public value fields
+// round-trip, assigned onto the live component; shadow_map_ is left alone.
+// Unlike Track<T>, this does not remove Sunlight from entities that gained it after the
+// capture — removing it would leak the shadow map, which has no destructor.
+void Engine::TrackSunlight() {
+    tracked_[entt::type_id<Sunlight>().hash()] = [](const entt::registry &registry, Checkpoint &cp) {
+        std::map<entt::entity, std::tuple<float, Color, bool>> data;
+        for (auto [entity, sun] : registry.view<const Sunlight>().each())
+            data.emplace(entity, std::tuple {sun.intensity, sun.color, sun.shadow_casting});
+
+        cp.restore_.emplace_back([data = std::move(data)](entt::registry &reg) {
+            for (const auto &[entity, values] : data) {
+                if (!reg.valid(entity) || !reg.all_of<Sunlight>(entity)) continue;
+                Sunlight &sun = reg.get<Sunlight>(entity);
+                std::tie(sun.intensity, sun.color, sun.shadow_casting) = values;
+            }
+        });
+    };
+}
+
+Checkpoint Engine::Save() {
+    Checkpoint cp;
+
+    WarnUntracked();
 
     for (auto &[_, capture] : tracked_)
         capture(registry, cp);
@@ -63,7 +93,21 @@ void Engine::RequestRestore(Checkpoint &cp) {
     pending_restore_ = &cp;
 }
 
+void Engine::ApplyPendingRestore() {
+    // Clear first: the pointer must not survive the restore it triggered, or the next
+    // frame would restore again. Restore itself never runs systems, so nothing can
+    // re-request in between.
+    if (Checkpoint *pending = pending_restore_) {
+        pending_restore_ = nullptr;
+        Restore(*pending);
+    }
+}
+
 void Engine::Restore(Checkpoint &cp) {
+    // A type first emplaced after the capture has no storage at Save time, so this is the
+    // only place its missing Track<T>() can be reported.
+    WarnUntracked();
+
     // Entities spawned after the capture go first: their Collider/Character
     // destructors remove the Jolt bodies, so the body set matches the recorder.
     const std::set<entt::entity> alive(cp.entities_.begin(), cp.entities_.end());
@@ -93,9 +137,10 @@ void Engine::Restore(Checkpoint &cp) {
     // BodyManager::RestoreState just walks the stream, so (a) a Collider destroyed since
     // the capture aborts it midway — the bodies it already visited keep the restored state,
     // the rest keep the current one, and nothing rolls back; (b) a Character destroyed since
-    // the capture leaves its Jolt body alive (~Character only removes it), so old state is
-    // written into an orphaned body with no error at all; (c) a body added since the capture
-    // is simply absent from the stream and silently keeps its current state.
+    // the capture behaves the same way — taco::~Character removes the body and then
+    // ~JPH::Character destroys it, so the body is gone from the manager just like (a);
+    // (c) a body added since the capture is simply absent from the stream and silently
+    // keeps its current state.
     // Rewind() is seekg(0, beg): it clears eofbit but not failbit, and a failed stream reads
     // as zero bodies, which RestoreState reports as success — so check IsFailed() too.
     cp.physics_.Rewind();

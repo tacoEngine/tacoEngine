@@ -120,11 +120,21 @@ engine back to it. In-memory only, valid for the current run, and reusable.
 - `Collider`/`Character` are not copied: Jolt's own `PhysicsSystem::SaveState` /
   `RestoreState` and `CharacterBase::SaveState` carry the simulation state.
 - Systems opt in by overriding `System::Clone()` (default `nullptr` = state kept).
+- `Material` is tracked **by value**: only `params[4]` really rewinds. `maps` is a heap
+  array the saved copy aliases (per-map texture/colour edits are not rewound) and `shader`
+  is overwritten by `DrawAllMeshes` every frame anyway.
+- `Sunlight` is the one component with a hand-written capture: only `intensity`, `color`
+  and `shadow_casting` round-trip. Its `shadow_map_` owns a GL fbo and heap arrays that
+  `Render` unloads on a config change, so restoring a saved copy would double-free them.
 - `Restore` destroys entities spawned since the capture; entities *destroyed* since
   cannot come back (their GPU/Jolt handles are gone) and are logged as an error.
 - Call `Restore` directly only from outside the loop (before `Run`, or after it returns).
   From inside a `System` phase hook use `RequestRestore(cp)`: it queues the checkpoint
-  and `Run` applies it at the end of that frame's `Update`. A direct `Restore` there
+  and `Run` applies it (via `ApplyPendingRestore`) at the end of that frame's `Update`.
+  The queued `Checkpoint` must be owned by something `Restore` cannot destroy — not by a
+  `System` and not by an entity: `Restore` destroys entities spawned since the capture and
+  erases system storage entries, so either owner can be freed mid-`Restore`.
+  A direct `Restore` there
   would destroy entities and erase/emplace into the `shared_ptr<System>` storages that
   `Engine::Update`'s `visit_systems` is iterating right then, and never call either
   during the physics step.

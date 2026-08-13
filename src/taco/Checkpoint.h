@@ -25,7 +25,9 @@
 namespace taco {
 /// In-memory snapshot of the engine state. Move-only (JPH::StateRecorderImpl is),
 /// reusable, and only valid for the run that produced it: it aliases GPU handles
-/// and Jolt body ids by value.
+/// and Jolt body ids by value. Reusable up to the first failure: Rewind() does not
+/// clear failbit, so once a restore poisons a recorder every later Restore on this
+/// checkpoint fails too, and there is no way to reset it.
 class Checkpoint {
     friend class Engine;
 
