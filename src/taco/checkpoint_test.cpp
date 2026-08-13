@@ -44,7 +44,10 @@ int main() {
         "              \"Collider\": {\"sphere\": 1.0} },"
         "  \"walker\": { \"Transform\": {\"position\":[20,10,0]},"
         "                \"Character\": {\"height\": 1.8, \"radius\": 0.2} },"
-        "  \"doomed\": { \"Transform\": {\"position\":[5,5,5]} }"
+        "  \"doomed\": { \"Transform\": {\"position\":[5,5,5]},"
+        "                \"Collider\": {\"sphere\": 0.5} },"
+        "  \"doomed_walker\": { \"Transform\": {\"position\":[40,10,0]},"
+        "                       \"Character\": {\"height\": 1.8, \"radius\": 0.2} }"
         "} }";
     { std::ofstream out("checkpoint_test_scene.json"); out << scene; }
 
@@ -68,6 +71,11 @@ int main() {
 
     const entt::entity doomed = loader.Resolve("doomed");
     assert(doomed != entt::null && doomed != ball);
+    engine.registry.get<taco::Collider>(doomed).SetPosition({5, 5, 5});
+
+    const entt::entity doomed_walker = loader.Resolve("doomed_walker");
+    assert(doomed_walker != entt::null);
+    engine.registry.get<taco::Character>(doomed_walker).SetPosition({40, 10, 0});
 
     engine.registry.get<taco::Collider>(ball).SetPosition({0, 10, 0});
 
@@ -90,6 +98,9 @@ int main() {
     const Vector3 saved_pos = engine.registry.get<taco::Collider>(ball).GetPosition();
     const Vector3 saved_vel = engine.registry.get<taco::Collider>(ball).GetVelocity();
     const Vector3 saved_walker = engine.registry.get<taco::Character>(walker).GetPosition();
+    const Vector3 saved_doomed = engine.registry.get<taco::Collider>(doomed).GetPosition();
+    const Vector3 saved_doomed_vel = engine.registry.get<taco::Collider>(doomed).GetVelocity();
+    const Vector3 saved_doomed_walker = engine.registry.get<taco::Character>(doomed_walker).GetPosition();
     assert(saved_pos.y < 10.f && saved_vel.y < -0.1f); // it really is falling
 
     taco::Checkpoint cp = engine.Save();
@@ -108,17 +119,24 @@ int main() {
     const entt::entity spawned = engine.registry.create();
     engine.registry.emplace<taco::Transform>(spawned, Vector3{1, 1, 1}, taco::Rotation(), Vector3{0, 0, 0});
 
-    // A captured entity destroyed since the capture cannot come back. Restoring must
-    // survive its stale handle (emplace_or_replace asserts on invalid entities, and a
-    // recycled index would otherwise be written into) and still restore the rest.
+    // Both destroyed entities must come back, with their bodies: the handles are parked,
+    // not destructed. Destroying them frees two entity indices that the creates below then
+    // recycle, so the revival has to be able to take them back.
     engine.registry.destroy(doomed);
+    engine.registry.destroy(doomed_walker);
+    const entt::entity squatter = engine.registry.create();
+    const entt::entity squatter2 = engine.registry.create();
+    assert(entt::to_entity(squatter) != entt::to_entity(squatter2));
+    for (const entt::entity squat : {squatter, squatter2})
+        assert(entt::to_entity(squat) == entt::to_entity(doomed)
+               || entt::to_entity(squat) == entt::to_entity(doomed_walker));
 
     engine.Restore(cp);
 
     const taco::Transform &t = engine.registry.get<taco::Transform>(ball);
     assert(t.position.x == 0 && t.position.y == 10 && t.position.z == 0);
     assert(!engine.registry.valid(spawned));
-    assert(!engine.registry.valid(doomed));
+    assert(!engine.registry.valid(squatter) && !engine.registry.valid(squatter2));
     assert(engine.registry.get<Untracked>(ball).value == 2);
     assert(engine.registry.get<Tracked>(ball).value == 1);
     assert(engine.registry.get<taco::Sunlight>(ball).intensity == 2.f);
@@ -131,6 +149,20 @@ int main() {
     assert(close(engine.registry.get<taco::Collider>(ball).GetPosition(), saved_pos));
     assert(close(engine.registry.get<taco::Collider>(ball).GetVelocity(), saved_vel));
     assert(close(engine.registry.get<taco::Character>(walker).GetPosition(), saved_walker));
+
+    // The destroyed entities are back under their original handles, with their components
+    // and their parked bodies — and the bodies still carry the state Jolt's stream replayed
+    // into them, which only works because they were re-added to the broad phase first.
+    assert(engine.registry.valid(doomed) && engine.registry.valid(doomed_walker));
+    assert(engine.registry.get<taco::Transform>(doomed).position.x == 5);
+    assert(close(engine.registry.get<taco::Collider>(doomed).GetPosition(), saved_doomed));
+    assert(close(engine.registry.get<taco::Collider>(doomed).GetVelocity(), saved_doomed_vel));
+    assert(close(engine.registry.get<taco::Character>(doomed_walker).GetPosition(), saved_doomed_walker));
+
+    // A revived body is simulated again, not left out of the broad phase.
+    for (int i = 0; i < 10; i++)
+        engine.GetPhysics()->Update(1.0 / 60.0);
+    assert(engine.registry.get<taco::Collider>(doomed).GetPosition().y < saved_doomed.y);
 
     // The clone is a fresh object; the original pointer is replaced, not mutated.
     const auto &restored =

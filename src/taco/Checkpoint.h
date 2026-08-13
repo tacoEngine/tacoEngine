@@ -12,6 +12,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <set>
 #include <tuple>
 #include <vector>
 
@@ -38,6 +39,9 @@ class Checkpoint {
     /// Cloned systems: storage id (systems live in named storages), entity, clone.
     std::vector<std::tuple<entt::id_type, entt::entity, std::shared_ptr<System>>> systems_;
     JPH::StateRecorderImpl physics_;
+    /// Entities holding a Collider at capture. A body parked by Engine::RetireCollider is
+    /// only handed back to one of these; characters_ below does the same job for Characters.
+    std::set<entt::entity> colliders_;
     /// Keyed by entity so iteration order cannot cross-apply state between characters.
     std::map<entt::entity, JPH::StateRecorderImpl> characters_;
 

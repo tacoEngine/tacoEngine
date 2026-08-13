@@ -41,6 +41,10 @@ class Engine {
     std::map<entt::id_type, std::function<void(const entt::registry &, Checkpoint &)>> tracked_;
     std::set<entt::id_type> ignored_;
     Checkpoint *pending_restore_ = nullptr;
+    /// Handles taken off destroyed entities so Restore can hand them back. See Checkpoint.cpp.
+    std::map<entt::entity, Collider> retired_colliders_;
+    std::map<entt::entity, Character> retired_characters_;
+    bool checkpointed_ = false;
 
     GBuffers gbuffers_;
     GBufferPresenter presenter_;
@@ -51,6 +55,7 @@ public:
     entt::registry registry;
 
     Engine();
+    ~Engine();
 
     void Run();
 
@@ -111,6 +116,11 @@ private:
     void WarnUntracked() const;
     /// Track<T> for Sunlight, minus its GPU-owning shadow_map_. See Checkpoint.cpp.
     void TrackSunlight();
+    /// on_destroy hooks: park the Jolt body instead of destroying it. See Checkpoint.cpp.
+    void RetireCollider(entt::registry &reg, entt::entity entity);
+    void RetireCharacter(entt::registry &reg, entt::entity entity);
+    /// Destroy every parked body. Runs at Save and at teardown.
+    void ClearRetired();
 
     void Update();
     void Render();

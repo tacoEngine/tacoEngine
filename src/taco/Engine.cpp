@@ -58,6 +58,17 @@ Engine::Engine() {
     Ignore<Collider>();
     Ignore<Character>();
     Ignore<std::shared_ptr<System>>();
+
+    // Destroying a physics entity would take its Jolt body with it, and a body cannot be
+    // rebuilt from a checkpoint. Park the handle instead so Restore can hand it back.
+    registry.on_destroy<Collider>().connect<&Engine::RetireCollider>(this);
+    registry.on_destroy<Character>().connect<&Engine::RetireCharacter>(this);
+}
+
+Engine::~Engine() {
+    // Parked bodies outlive their entities by design, so nothing else frees them. The
+    // registry is destroyed after this and never fires on_destroy, so no new ones appear.
+    ClearRetired();
 }
 
 void Engine::Run() {

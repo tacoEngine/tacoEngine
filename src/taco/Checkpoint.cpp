@@ -54,10 +54,59 @@ void Engine::TrackSunlight() {
     };
 }
 
+// A Jolt body cannot be rebuilt from a checkpoint — its shape, its mass overrides and its
+// body id all die with it — so a destroyed physics entity does not destroy its body. It only
+// leaves the broad phase and its handle is parked here until a Restore hands it back.
+// BodyManager::SaveState skips bodies that are not in the broad phase, so a parked body is
+// invisible to every later checkpoint and costs no simulation time.
+// Moving the handle out empties its physics_, which is exactly what ~Collider tests, so the
+// husk left behind on the entity destructs without touching the body.
+// The key cannot collide: a parked handle only becomes reachable again through Restore, which
+// takes it out of the map on the way.
+// Before the first Save there is nothing to be restored to, so destruction stays destruction
+// and a game that never checkpoints never pays for any of this.
+void Engine::RetireCollider(entt::registry &reg, const entt::entity entity) {
+    if (!checkpointed_) return;
+
+    Collider &collider = reg.get<Collider>(entity);
+    physics_->body_interface_.RemoveBody(collider.body_id_);
+    retired_colliders_.emplace(entity, std::move(collider));
+}
+
+void Engine::RetireCharacter(entt::registry &reg, const entt::entity entity) {
+    if (!checkpointed_) return;
+
+    Character &character = reg.get<Character>(entity);
+    physics_->body_interface_.RemoveBody(character.character_->GetBodyID());
+    retired_characters_.emplace(entity, std::move(character));
+}
+
+// Dropping a parked handle takes care: ~Collider and ~Character both remove the body from
+// the broad phase, and a parked body is already out — Jolt rejects the second removal. So
+// destroy the body here and empty the handle, which is what both destructors no-op on.
+// ~JPH::Character destroys the character's body itself, so that one only needs disarming.
+void Engine::ClearRetired() {
+    for (auto &[entity, collider] : retired_colliders_) {
+        physics_->body_interface_.DestroyBody(collider.body_id_);
+        collider.physics_.reset();
+    }
+    retired_colliders_.clear();
+
+    for (auto &[entity, character] : retired_characters_)
+        character.physics_.reset();
+    retired_characters_.clear();
+}
+
 Checkpoint Engine::Save() {
     Checkpoint cp;
 
     WarnUntracked();
+
+    // Nothing parked before this capture can be brought back by it: the entity is not in
+    // entities_, so Restore would drop the handle anyway. Retiring only starts here, which
+    // is also why a game that never checkpoints never pays for it.
+    ClearRetired();
+    checkpointed_ = true;
 
     for (auto &[_, capture] : tracked_)
         capture(registry, cp);
@@ -79,6 +128,9 @@ Checkpoint Engine::Save() {
 
     // Jolt's own rollback support: global state, bodies, contacts and constraints.
     physics_->system_.SaveState(cp.physics_);
+
+    for (const entt::entity entity : registry.view<Collider>())
+        cp.colliders_.insert(entity);
 
     for (auto [entity, character] : registry.view<Character>().each())
         character.character_->SaveState(cp.characters_[entity]);
@@ -117,9 +169,17 @@ void Engine::Restore(Checkpoint &cp) {
     for (const entt::entity entity : spawned)
         registry.destroy(entity);
 
-    for (const entt::entity entity : cp.entities_)
-        if (!registry.valid(entity))
-            logging::Logger::Error("[checkpoint]: entity destroyed since the capture cannot be restored");
+    // Bring back the entities destroyed since the capture. create(hint) returns the exact
+    // handle when its index is free, and here it always is: anything that could have
+    // recycled the index was spawned after the capture and was just destroyed above.
+    for (const entt::entity entity : cp.entities_) {
+        if (registry.valid(entity)) continue;
+
+        if (const entt::entity revived = registry.create(entity); revived != entity) {
+            registry.destroy(revived);
+            logging::Logger::Error("[checkpoint]: entity index in use, cannot restore entity");
+        }
+    }
 
     for (auto &restore : cp.restore_)
         restore(registry);
@@ -133,14 +193,36 @@ void Engine::Restore(Checkpoint &cp) {
         storage.emplace(entity, system->Clone());
     }
 
-    // A changed body set is only partly detectable, and that is an accepted ceiling here:
-    // BodyManager::RestoreState just walks the stream, so (a) a Collider destroyed since
-    // the capture aborts it midway — the bodies it already visited keep the restored state,
-    // the rest keep the current one, and nothing rolls back; (b) a Character destroyed since
-    // the capture behaves the same way — taco::~Character removes the body and then
-    // ~JPH::Character destroys it, so the body is gone from the manager just like (a);
-    // (c) a body added since the capture is simply absent from the stream and silently
-    // keeps its current state.
+    // Hand the parked bodies back, and destroy whatever is left over — those handles belong
+    // to entities this checkpoint never saw, so it can never revive them. Both halves have to
+    // happen before RestoreState: a revived body must be in the broad phase for the stream to
+    // find it, and a leftover must be out of the body manager before the stream is replayed.
+    for (auto &[entity, collider] : retired_colliders_) {
+        if (cp.colliders_.count(entity) && registry.valid(entity) && !registry.all_of<Collider>(entity)) {
+            // The body kept its id, shape and mass the whole time; RestoreState sets the
+            // rest, including whether it is awake, so it goes back in deactivated.
+            physics_->body_interface_.AddBody(collider.body_id_, JPH::EActivation::DontActivate);
+            registry.emplace<Collider>(entity, std::move(collider));
+        } else {
+            physics_->body_interface_.DestroyBody(collider.body_id_);
+            collider.physics_.reset();
+        }
+    }
+    retired_colliders_.clear();
+
+    for (auto &[entity, character] : retired_characters_) {
+        if (cp.characters_.count(entity) && registry.valid(entity) && !registry.all_of<Character>(entity)) {
+            character.character_->AddToPhysicsSystem(JPH::EActivation::DontActivate);
+            registry.emplace<Character>(entity, std::move(character));
+        } else {
+            character.physics_.reset(); // ~JPH::Character still destroys the body
+        }
+    }
+    retired_characters_.clear();
+
+    // A body added since the capture is absent from the stream and silently keeps its current
+    // state — an accepted ceiling. A missing one no longer is: every body the stream names is
+    // either still attached or was just handed back above.
     // Rewind() is seekg(0, beg): it clears eofbit but not failbit, and a failed stream reads
     // as zero bodies, which RestoreState reports as success — so check IsFailed() too.
     cp.physics_.Rewind();

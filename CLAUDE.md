@@ -119,6 +119,14 @@ engine back to it. In-memory only, valid for the current run, and reusable.
   and `Save` warns about any storage that is neither tracked nor `Ignore<T>()`d.
 - `Collider`/`Character` are not copied: Jolt's own `PhysicsSystem::SaveState` /
   `RestoreState` and `CharacterBase::SaveState` carry the simulation state.
+- **Destroying a physics entity after the first `Save` does not destroy its Jolt body.**
+  `on_destroy` hooks (`RetireCollider`/`RetireCharacter`) move the handle into
+  `retired_colliders_`/`retired_characters_` and only take the body out of the broad phase —
+  a body cannot be rebuilt (its id, shape and mass overrides die with it), so it is kept.
+  `BodyManager::SaveState` skips bodies outside the broad phase, so a parked body is
+  invisible to later checkpoints and unsimulated. `Restore` re-adds it; `Save` and `~Engine`
+  destroy whatever is still parked. The cost: every physics entity destroyed since the last
+  `Save`/`Restore` holds its body. Before the first `Save` nothing is retained.
 - Systems opt in by overriding `System::Clone()` (default `nullptr` = state kept).
 - `Material` is tracked **by value**: only `params[4]` really rewinds. `maps` is a heap
   array the saved copy aliases (per-map texture/colour edits are not rewound) and `shader`
@@ -126,10 +134,15 @@ engine back to it. In-memory only, valid for the current run, and reusable.
 - `Sunlight` is the one component with a hand-written capture: only `intensity`, `color`
   and `shadow_casting` round-trip. Its `shadow_map_` owns a GL fbo and heap arrays that
   `Render` unloads on a config change, so restoring a saved copy would double-free them.
-- `Restore` destroys entities spawned since the capture; entities *destroyed* since
-  cannot come back (their GPU/Jolt handles are gone) and are logged as an error. A `Link`
-  restored onto such a target is written back as-is, and the next `Update` reads an invalid
-  entity — the `Link` loop does not guard, by design.
+- `Restore` destroys entities spawned since the capture, then **resurrects the ones
+  destroyed since** under their original handles: `registry.create(hint)` returns the exact
+  handle when its index is free, and after the first step it always is. Components, cloned
+  systems and the parked body all land back on the revived entity, so a `Link` pointing at
+  one stays valid. Two captured entities can never share an index, and anything that
+  recycled one died in the first step, so the "index in use" error is unreachable — it is
+  there because `create(hint)` silently returns a *different* entity in that case.
+- Only the newest capture can resurrect: `Save` and `Restore` both empty the parked-handle
+  maps, so an older `Checkpoint` restored afterwards finds those bodies destroyed.
 - Call `Restore` directly only from outside the loop (before `Run`, or after it returns).
   From inside a `System` phase hook use `RequestRestore(cp)`: it queues the checkpoint
   and `Run` applies it (via `ApplyPendingRestore`) at the end of that frame's `Update`.

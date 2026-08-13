@@ -141,12 +141,40 @@ The next `Update()` pushes the restored `Transform`s into the bodies as usual.
 Both halves were captured at the same instant, so it writes back the values Jolt
 already has and nothing drifts.
 
+## Resurrection
+
+A destroyed entity is not rebuilt, it is *retained*. Three pieces:
+
+- **The handle.** `registry.create(hint)` returns exactly the hint when its index
+  is free, and after `Restore` destroys everything spawned since the capture, every
+  captured index is free — anything that recycled one was spawned after the capture.
+- **The components.** They are already in the checkpoint by value, and land on the
+  revived handle like on any other.
+- **The body.** A Jolt body cannot be recreated from a copy: the id, the shape and
+  the mass overrides die with it. So it never dies. `Engine` connects `on_destroy`
+  hooks for `Collider` and `Character` that take the body out of the broad phase and
+  move the handle into `retired_colliders_` / `retired_characters_`. Moving empties
+  the handle's `physics_`, which is what both destructors test, so the husk left on
+  the entity destructs without touching the body. `BodyManager::SaveState` only saves
+  bodies passing `IsInBroadPhase()`, so a parked body is invisible to later
+  checkpoints and costs no simulation time.
+
+`Restore` re-adds each parked body whose entity the checkpoint knows, before
+`RestoreState` so the stream can find it, and destroys the rest. `Save` and
+`~Engine` destroy whatever is still parked; retention only starts at the first
+`Save`, so a game that never checkpoints is unaffected.
+
+The cost is memory: every physics entity destroyed since the last `Save` or
+`Restore` still holds its body.
+
 ## Constraints and known ceilings
 
-- **An entity destroyed after the checkpoint cannot be resurrected.** Its GPU and
-  Jolt handles are gone and a `Collider` cannot be rebuilt from a copy. `Restore`
-  logs any captured entity that is no longer valid, and Jolt's `RestoreState`
-  will report the body mismatch. Documented, not solved.
+- **An entity destroyed after the checkpoint comes back** — see "Resurrection"
+  below — but only for the newest capture: `Save` and `Restore` both discard the
+  parked handles, so an older `Checkpoint` restored afterwards finds those bodies
+  destroyed.
+- **A body added after the checkpoint keeps its current state.** It is simply
+  absent from the recorder's stream. Documented, not solved.
 - **`Save` / `Restore` must not be called during the physics step.** Any system
   phase or a point between frames is fine.
 - **A checkpoint does not outlive the run.** It aliases GPU resources and Jolt

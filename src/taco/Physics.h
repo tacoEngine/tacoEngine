@@ -142,6 +142,7 @@ public:
 
 class Collider {
     friend class PhysicsEngine;
+    friend class Engine;
 
     JPH::BodyID body_id_;
     std::shared_ptr<PhysicsEngine> physics_;
