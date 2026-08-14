@@ -10,6 +10,7 @@
 #define ENGINE_H
 
 #include <set>
+#include <tuple>
 #include <vector>
 
 #include <entt/entt.hpp>
@@ -45,14 +46,24 @@ class Engine {
     std::vector<SystemHooks> system_hooks_;
     std::set<entt::id_type> system_types_;
 
-public:
-    entt::registry registry;
+    entt::registry registry_;
 
+public:
     Engine();
     ~Engine();
 
     /// A fresh entity with no components.
     Entity Create();
+
+    /// Visit every entity carrying all of Ts. `fn` is called as fn(Entity, Ts &...).
+    /// Engine's own Render/Update use registry_.view directly; this is for consumers.
+    template<class... Ts, class Fn>
+    void Each(Fn &&fn) {
+        for (auto tuple : registry_.view<Ts...>().each())
+            std::apply([&](entt::entity entity, Ts &...components) {
+                fn(Entity(this, &registry_, entity), components...);
+            }, tuple);
+    }
 
     /// Run all five system phases once. Exists so the dispatch table can be tested without
     /// a frame; Run()/Update() do not use it.
@@ -78,7 +89,7 @@ private:
 
     void Update();
     void Render();
-    size_t DrawAllMeshes(const decltype(registry.view<const Transform, const Mesh, Material>()) &model_view,
+    size_t DrawAllMeshes(const decltype(registry_.view<const Transform, const Mesh, Material>()) &model_view,
                          Frustum frustum,
                          Shader shader = LoadMaterialDefault().shader);
 

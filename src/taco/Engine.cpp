@@ -49,15 +49,15 @@ Engine::Engine() {
     ReloadGBuffers();
 
     // A Jolt body outlives any single copy of its component; it dies with the entity.
-    registry.on_destroy<Collider>().connect<&Engine::DestroyColliderBody>(this);
-    registry.on_destroy<Character>().connect<&Engine::DestroyCharacterBody>(this);
+    registry_.on_destroy<Collider>().connect<&Engine::DestroyColliderBody>(this);
+    registry_.on_destroy<Character>().connect<&Engine::DestroyCharacterBody>(this);
 }
 
 // EnTT does not fire on_destroy when the registry itself is destroyed — ~basic_storage calls
 // the non-virtual shrink_to_size(0), which never publishes. So clear it here, while physics_
 // is still alive, or every body leaks.
 Engine::~Engine() {
-    registry.clear();
+    registry_.clear();
 }
 
 void Engine::DestroyColliderBody(entt::registry &reg, const entt::entity entity) {
@@ -101,9 +101,9 @@ void Engine::Update() {
     DispatchSystems(&SystemHooks::early);
     DispatchSystems(&SystemHooks::pre_physics);
 
-    auto collider_view = registry.view<Collider, Transform>();
-    auto character_view = registry.view<Character, Transform>();
-    auto link_view = registry.view<Link, Transform>();
+    auto collider_view = registry_.view<Collider, Transform>();
+    auto character_view = registry_.view<Character, Transform>();
+    auto link_view = registry_.view<Link, Transform>();
 
     for (auto [_, collider, transform] : collider_view.each()) {
         collider.SetPosition(transform.position);
@@ -167,7 +167,7 @@ void Engine::Update() {
 // means a type registered mid-phase still runs in that phase — what the old storage scan did.
 void Engine::DispatchSystems(void (*SystemHooks::*phase)(entt::registry &, Engine *)) {
     for (size_t i = 0; i < system_hooks_.size(); i++)
-        (system_hooks_[i].*phase)(registry, this);
+        (system_hooks_[i].*phase)(registry_, this);
 }
 
 void Engine::RunSystemPhasesForTest() {
@@ -195,10 +195,10 @@ void Engine::Render() {
     if (IsWindowResized())
         ReloadGBuffers();
 
-    auto camera_view = registry.view<const Transform, const Camera>();
-    auto model_view = registry.view<const Transform, const Mesh, Material>();
-    auto env_view = registry.view<const Environment>();
-    auto sky_view = registry.view<const Sky>();
+    auto camera_view = registry_.view<const Transform, const Camera>();
+    auto model_view = registry_.view<const Transform, const Mesh, Material>();
+    auto env_view = registry_.view<const Environment>();
+    auto sky_view = registry_.view<const Sky>();
 
     timers[0].Start();
 
@@ -236,7 +236,7 @@ void Engine::Render() {
 
     timers[0].Stop();
 
-    auto sun_view = registry.view<const Transform, Sunlight>();
+    auto sun_view = registry_.view<const Transform, Sunlight>();
 
     for (auto [_, transform, sun] : sun_view.each()) {
         if (!sun.shadow_casting) {
@@ -360,7 +360,7 @@ void Engine::Render() {
     running_ = !WindowShouldClose();
 }
 
-size_t Engine::DrawAllMeshes(const decltype(registry.view<const Transform, const Mesh, Material>()) &model_view,
+size_t Engine::DrawAllMeshes(const decltype(registry_.view<const Transform, const Mesh, Material>()) &model_view,
                              Frustum frustum,
                              Shader shader) {
     size_t drawn_meshes = 0;
@@ -372,7 +372,7 @@ size_t Engine::DrawAllMeshes(const decltype(registry.view<const Transform, const
 
         mesh_count_++;
 
-        auto *bb = registry.try_get<BoundingBox>(ent);
+        auto *bb = registry_.try_get<BoundingBox>(ent);
         if (bb) {
             BoundingBox transformed = TransformAABB(*bb, mat_model);
             DrawBoundingBox(transformed, RED);
@@ -396,7 +396,7 @@ void Engine::ReloadGBuffers() {
 }
 
 Entity Engine::Create() {
-    return Entity(this, &registry, registry.create());
+    return Entity(this, &registry_, registry_.create());
 }
 
 PhysicsEngine *Engine::GetPhysics() const {

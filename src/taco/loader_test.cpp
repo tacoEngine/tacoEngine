@@ -30,25 +30,23 @@ int main() {
 
     // Entity 'a': the one carrying a Mesh, positioned at (1,2,3).
     bool found_a = false;
-    for (const entt::entity e : engine.registry.view<Mesh, taco::Transform>()) {
-        const taco::Transform &t = engine.registry.get<taco::Transform>(e);
+    engine.Each<Mesh, taco::Transform>([&](taco::Entity e, Mesh &m, taco::Transform &t) {
         if (t.position.x == 1 && t.position.y == 2 && t.position.z == 3) {
             found_a = true;
-            assert(engine.registry.all_of<BoundingBox>(e));
-            assert(engine.registry.get<Mesh>(e).tangents != nullptr);
+            assert(e.Has<BoundingBox>());
+            assert(m.tangents != nullptr);
         }
-    }
+    });
     assert(found_a);
 
     // Entity 'b': its Link must resolve to 'a' with the right per-axis flags.
     bool found_b = false;
-    for (const entt::entity e : engine.registry.view<taco::Link>()) {
+    engine.Each<taco::Link>([&](taco::Entity, taco::Link &link) {
         found_b = true;
-        const taco::Link &link = engine.registry.get<taco::Link>(e);
         const taco::Transform &t = link.target.Get<taco::Transform>();
         assert(t.position.x == 1 && t.position.y == 2 && t.position.z == 3);
         assert(link.linkPosX && !link.linkPosY && link.linkPosZ);
-    }
+    });
     assert(found_b);
 
     std::printf("loader self-check passed\n");

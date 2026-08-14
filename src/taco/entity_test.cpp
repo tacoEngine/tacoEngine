@@ -14,6 +14,7 @@
 #include "taco/Engine.h"
 #include "taco/Entity.h"
 #include "taco/Physics.h"
+#include "taco/comp/Camera.h"
 #include "taco/comp/Transform.h"
 
 namespace {
@@ -41,7 +42,7 @@ void TestEntityOperations() {
     assert(e.Valid()); // removing the last component does not destroy the entity
 
     // Two handles to the same entity compare equal; different entities do not.
-    const taco::Entity same(&engine, &engine.registry, e.id());
+    const taco::Entity same = e;
     assert(same == e);
     assert(!(engine.Create() == e));
 
@@ -107,6 +108,30 @@ void TestSystemReceivesOwnEntity() {
     assert(e.Get<SelfCheckSystem>().seen == e.id());
 }
 
+void TestEach() {
+    taco::Engine engine;
+
+    taco::Entity a = engine.Create();
+    a.Add<taco::Transform>(Vector3{1, 0, 0}, taco::Rotation(), Vector3{0, 0, 0});
+    taco::Entity b = engine.Create();
+    b.Add<taco::Transform>(Vector3{2, 0, 0}, taco::Rotation(), Vector3{0, 0, 0});
+    engine.Create().Add<taco::Camera>(72.f); // no Transform: must not be visited
+
+    int seen = 0;
+    float sum = 0;
+    engine.Each<taco::Transform>([&](taco::Entity e, taco::Transform &t) {
+        assert(e.Valid());
+        seen++;
+        sum += t.position.x;
+        t.position.x *= 10; // the callback gets a reference into the storage
+    });
+
+    assert(seen == 2);
+    assert(sum == 3);
+    assert(a.Get<taco::Transform>().position.x == 10);
+    assert(b.Get<taco::Transform>().position.x == 20);
+}
+
 void TestBodyLifetime() {
     taco::Engine engine;
     const size_t empty = engine.GetPhysics()->BodyCount();
@@ -149,6 +174,7 @@ int main() {
     TestSystemDispatch();
     TestSystemReceivesOwnEntity();
     TestBodyLifetime();
+    TestEach();
     std::printf("entity self-check passed\n");
     return 0;
 }
