@@ -20,6 +20,8 @@ set(TACO_SOURCES
         src/taco/comp/Camera.h
         src/taco/comp/Lights.cpp
         src/taco/comp/Lights.h
+        src/taco/comp/System.cpp
+        src/taco/comp/System.h
         src/taco/comp/Transform.h
         src/taco/misc/Debug.cpp
         src/taco/misc/Debug.h
@@ -28,6 +30,7 @@ set(TACO_SOURCES
         src/taco/Config.h
         src/taco/Engine.cpp
         src/taco/Engine.h
+        src/taco/Entity.h
         src/taco/Graphics.h
         src/taco/Loader.cpp
         src/taco/Loader.h
@@ -51,3 +54,6 @@ target_link_libraries(tacoLoaderTest tacoEngine)
 
 add_executable(tacoInputTest src/taco/input/input_test.cpp)
 target_link_libraries(tacoInputTest tacoEngine)
+
+add_executable(tacoEntityTest src/taco/entity_test.cpp)
+target_link_libraries(tacoEntityTest tacoEngine)

@@ -15,6 +15,7 @@
 
 #include "comp/Transform.h"
 #include "Config.h"
+#include "Entity.h"
 #include "input/Input.h"
 #include "misc/Debug.h"
 #include "Physics.h"
@@ -42,6 +43,9 @@ public:
     entt::registry registry;
 
     Engine();
+
+    /// A fresh entity with no components.
+    Entity Create();
 
     void Run();
 

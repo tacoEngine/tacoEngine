@@ -79,10 +79,10 @@ void Engine::Update() {
     };
 
     visit_systems([&](std::shared_ptr<System> system, entt::entity entity) {
-        system->UpdateEarly(this, entity);
+        system->UpdateEarly(this, Entity(this, &registry, entity));
     });
     visit_systems([&](std::shared_ptr<System> system, entt::entity entity) {
-        system->UpdatePrePhysics(this, entity);
+        system->UpdatePrePhysics(this, Entity(this, &registry, entity));
     });
 
     auto collider_view = registry.view<Collider, Transform>();
@@ -143,10 +143,10 @@ void Engine::Update() {
     }
 
     visit_systems([&](std::shared_ptr<System> system, entt::entity entity) {
-        system->UpdatePostPhysics(this, entity);
+        system->UpdatePostPhysics(this, Entity(this, &registry, entity));
     });
     visit_systems([&](std::shared_ptr<System> system, entt::entity entity) {
-        system->UpdateLate(this, entity);
+        system->UpdateLate(this, Entity(this, &registry, entity));
     });
 }
 
@@ -328,7 +328,7 @@ void Engine::Render() {
             continue;
         auto system_view = entt::basic_view {registry.storage<std::shared_ptr<System>>(id)};
         for (auto [entity, system] : system_view.each()) {
-            system->UpdateUI(this, entity);
+            system->UpdateUI(this, Entity(this, &registry, entity));
         }
     }
 
@@ -372,6 +372,10 @@ void Engine::ReloadGBuffers() {
     UnloadPresenter(presenter_);
     gbuffers_ = LoadGBuffers(GetScreenWidth(), GetScreenHeight());
     presenter_ = LoadPresenter(gbuffers_);
+}
+
+Entity Engine::Create() {
+    return Entity(this, &registry, registry.create());
 }
 
 std::shared_ptr<PhysicsEngine> Engine::GetPhysics() const {
