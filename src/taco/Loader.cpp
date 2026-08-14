@@ -16,7 +16,6 @@
 #include <raylib.h>
 #include <raymath.h>
 #include <rlgl.h>
-#include <entt/core/hashed_string.hpp>
 
 #include "Engine.h"
 #include "comp/Camera.h"
@@ -129,17 +128,13 @@ void Loader::RegisterComponent(const std::string &name, ComponentLoader fn) {
     components_[name] = std::move(fn);
 }
 
-void Loader::RegisterSystem(const std::string &name, SystemFactory fn) {
-    systems_[name] = std::move(fn);
-}
-
 std::string Loader::Path(const std::string &rel) const {
     return asset_dir_ + "/" + rel;
 }
 
-entt::entity Loader::Resolve(const std::string &name) const {
+Entity Loader::Resolve(const std::string &name) const {
     auto it = named_.find(name);
-    return it == named_.end() ? entt::null : it->second;
+    return it == named_.end() ? Entity() : it->second;
 }
 
 void Loader::LoadScene(const std::string &rel_path) {
@@ -158,7 +153,7 @@ void Loader::LoadScene(const std::string &rel_path) {
     // Pass 1: create and name every non-model entity.
     for (auto it = entities.MemberBegin(); it != entities.MemberEnd(); ++it) {
         if (it->value.HasMember("model")) continue;
-        named_[it->name.GetString()] = engine_.registry.create();
+        named_[it->name.GetString()] = engine_.Create();
     }
 
     // Pass 2: apply components (names now resolvable) and attach systems.
@@ -167,14 +162,14 @@ void Loader::LoadScene(const std::string &rel_path) {
             ExpandModel(it->value);
             continue;
         }
-        const entt::entity e = named_[it->name.GetString()];
+        const Entity e = named_[it->name.GetString()];
         ApplyComponents(e, it->value);
         if (it->value.HasMember("systems"))
-            AttachSystems(e, it->value["systems"]);
+            ApplySystems(e, it->value["systems"]);
     }
 }
 
-void Loader::ApplyComponents(entt::entity entity, const Value &spec) {
+void Loader::ApplyComponents(Entity entity, const Value &spec) {
     // Fixed order so mesh-dependent components (Collider) and name-dependent
     // ones (Link) see what they need. JSON object order is not guaranteed.
     static const char *order[] = {"Transform", "Mesh", "Material", "Collider", "Character"};
@@ -196,80 +191,81 @@ void Loader::ApplyComponents(entt::entity entity, const Value &spec) {
     }
 }
 
-void Loader::AttachSystems(entt::entity entity, const Value &list) {
+// Both spellings the scene format has always accepted:
+//   "systems": ["LookSystem", "AimSystem"]        - no parameters
+//   "systems": {"LookSystem": {...}}              - the object is the component Value
+// Either way the name is looked up in the one component map, so a system registered with
+// Register<T> and a component registered with RegisterComponent are indistinguishable here.
+void Loader::ApplySystems(Entity entity, const Value &list) {
     static const Value null_params;
-    auto attach = [&](const std::string &name, const Value &params) {
-        auto f = systems_.find(name);
-        if (f == systems_.end()) return;
-        engine_.registry.storage<std::shared_ptr<System>>(entt::hashed_string{name.c_str()})
-                .emplace(entity, f->second(params));
+
+    auto apply = [&](const std::string &name, const Value &params) {
+        auto f = components_.find(name);
+        if (f != components_.end()) f->second(*this, entity, params);
     };
 
     if (list.IsArray())
-        for (const auto &s : list.GetArray()) attach(s.GetString(), null_params);
+        for (const auto &s : list.GetArray()) apply(s.GetString(), null_params);
     else if (list.IsObject())
         for (auto it = list.MemberBegin(); it != list.MemberEnd(); ++it)
-            attach(it->name.GetString(), it->value);
+            apply(it->name.GetString(), it->value);
 }
 
 void Loader::RegisterBuiltins() {
-    RegisterComponent("Transform", [](Loader &l, entt::entity e, const Value &v) {
+    RegisterComponent("Transform", [](Loader &l, Entity e, const Value &v) {
         const Vector3 pos = GetVec3(v, "position", {0, 0, 0});
         const Vector3 rot = GetVec3(v, "rotation", {0, 0, 0});
         const Vector3 vel = GetVec3(v, "velocity", {0, 0, 0});
-        l.engine().registry.emplace<Transform>(
-            e, pos, Rotation(rot.x * DEG2RAD, rot.y * DEG2RAD, rot.z * DEG2RAD), vel);
+        e.Add<Transform>(pos, Rotation(rot.x * DEG2RAD, rot.y * DEG2RAD, rot.z * DEG2RAD), vel);
     });
 
-    RegisterComponent("Camera", [](Loader &l, entt::entity e, const Value &v) {
-        l.engine().registry.emplace<Camera>(e, GetFloat(v, "fov", 72.f));
+    RegisterComponent("Camera", [](Loader &l, Entity e, const Value &v) {
+        e.Add<Camera>(GetFloat(v, "fov", 72.f));
     });
 
-    RegisterComponent("Sunlight", [](Loader &l, entt::entity e, const Value &v) {
+    RegisterComponent("Sunlight", [](Loader &l, Entity e, const Value &v) {
         const float intensity = GetFloat(v, "intensity", 1.f);
         const Color color = v.HasMember("color") ? GetColor(v["color"], WHITE) : WHITE;
         const bool shadow = GetBool(v, "shadow", true);
-        l.engine().registry.emplace<Sunlight>(e, intensity, color, shadow);
+        e.Add<Sunlight>(intensity, color, shadow);
     });
 
-    RegisterComponent("Environment", [](Loader &l, entt::entity e, const Value &v) {
+    RegisterComponent("Environment", [](Loader &l, Entity e, const Value &v) {
         Image img = LoadImage(l.Path(v["hdr"].GetString()).c_str());
-        l.engine().registry.emplace<Environment>(e, img);
+        e.Add<Environment>(img);
         UnloadImage(img);
     });
 
-    RegisterComponent("Sky", [](Loader &l, entt::entity e, const Value &v) {
+    RegisterComponent("Sky", [](Loader &l, Entity e, const Value &v) {
         Image img = LoadImage(l.Path(v["hdr"].GetString()).c_str());
-        l.engine().registry.emplace<Sky>(e, img);
+        e.Add<Sky>(img);
         UnloadImage(img);
     });
 
-    RegisterComponent("Link", [](Loader &l, entt::entity e, const Value &v) {
-        const entt::entity target = l.Resolve(v["target"].GetString());
+    RegisterComponent("Link", [](Loader &l, Entity e, const Value &v) {
+        const Entity target = l.Resolve(v["target"].GetString());
         bool px, py, pz, rx, ry, rz, vx, vy, vz;
         GetBool3(v, "pos", px, py, pz);
         GetBool3(v, "rot", rx, ry, rz);
         GetBool3(v, "vel", vx, vy, vz);
-        l.engine().registry.emplace<Link>(e, target, px, py, pz, rx, ry, rz, vx, vy, vz);
+        e.Add<Link>(target, px, py, pz, rx, ry, rz, vx, vy, vz);
     });
 
-    RegisterComponent("Character", [](Loader &l, entt::entity e, const Value &v) {
-        l.engine().registry.emplace<Character>(
-            e, l.engine().GetPhysics()->CreateCharacter(GetFloat(v, "height", 1.8f),
-                                                        GetFloat(v, "radius", 0.2f)));
+    RegisterComponent("Character", [](Loader &l, Entity e, const Value &v) {
+        e.Add<Character>(l.engine().GetPhysics()->CreateCharacter(GetFloat(v, "height", 1.8f),
+                                                                  GetFloat(v, "radius", 0.2f)));
     });
 
-    RegisterComponent("Collider", [](Loader &l, entt::entity e, const Value &v) {
+    RegisterComponent("Collider", [](Loader &l, Entity e, const Value &v) {
         auto physics = l.engine().GetPhysics();
         if (v.HasMember("sphere")) {
-            l.engine().registry.emplace<Collider>(e, physics->CreateSphereCollider(v["sphere"].GetFloat()));
+            e.Add<Collider>(physics->CreateSphereCollider(v["sphere"].GetFloat()));
         } else if (GetBool(v, "mesh", false)) {
-            Mesh &m = l.engine().registry.get<Mesh>(e);
-            l.engine().registry.emplace<Collider>(e, physics->CreateMeshCollider(m, GetBool(v, "dynamic", true)));
+            e.Add<Collider>(physics->CreateMeshCollider(e.Get<Mesh>(), GetBool(v, "dynamic", true)));
         }
     });
 
-    RegisterComponent("Mesh", [](Loader &l, entt::entity e, const Value &v) {
+    RegisterComponent("Mesh", [](Loader &l, Entity e, const Value &v) {
         Mesh mesh = {};
         if (v.HasMember("generate")) {
             mesh = GenNamedMesh(v["generate"].GetString(), v);
@@ -290,12 +286,12 @@ void Loader::RegisterBuiltins() {
             mesh = m.meshes[(int) GetFloat(v, "meshIndex", 0)];
         }
         if (mesh.tangents == nullptr) GenMeshTangents(&mesh);
-        l.engine().registry.emplace<Mesh>(e, mesh);
-        if (!l.engine().registry.all_of<BoundingBox>(e))
-            l.engine().registry.emplace<BoundingBox>(e, GetMeshBoundingBox(mesh));
+        e.Add<Mesh>(mesh);
+        if (!e.Has<BoundingBox>())
+            e.Add<BoundingBox>(GetMeshBoundingBox(mesh));
     });
 
-    RegisterComponent("Material", [](Loader &l, entt::entity e, const Value &v) {
+    RegisterComponent("Material", [](Loader &l, Entity e, const Value &v) {
         Material mat = LoadMaterialDefault();
         mat.maps[MATERIAL_MAP_ALBEDO].texture    = MapTexture(l, v, "albedo",    LIGHTGRAY);
         mat.maps[MATERIAL_MAP_NORMAL].texture    = MapTexture(l, v, "normal",    Color{128, 128, 255, 255});
@@ -304,7 +300,7 @@ void Loader::RegisterBuiltins() {
         mat.maps[MATERIAL_MAP_EMISSION].texture  = MapTexture(l, v, "emission",  BLACK);
         mat.maps[MATERIAL_MAP_OCCLUSION].texture = MapTexture(l, v, "occlusion", WHITE);
         FinishMaterial(mat);
-        l.engine().registry.emplace<Material>(e, mat);
+        e.Add<Material>(mat);
     });
 }
 
@@ -315,7 +311,7 @@ void Loader::ExpandModel(const Value &spec) {
         FixModelMaterial(model.materials[i]);
 
     for (int i = 0; i < model.meshCount; i++) {
-        const entt::entity e = engine_.registry.create();
+        Entity e = engine_.Create();
 
         Mesh mesh = model.meshes[i];
         // ponytail: GLTF-provided tangents are kept; only meshes lacking tangents
@@ -326,11 +322,11 @@ void Loader::ExpandModel(const Value &spec) {
         if (spec.HasMember("Transform"))
             components_["Transform"](*this, e, spec["Transform"]);
         else
-            engine_.registry.emplace<Transform>(e, Vector3{0, 0, 0}, Rotation(), Vector3{0, 0, 0});
+            e.Add<Transform>(Vector3{0, 0, 0}, Rotation(), Vector3{0, 0, 0});
 
-        engine_.registry.emplace<Mesh>(e, mesh);
-        engine_.registry.emplace<BoundingBox>(e, GetMeshBoundingBox(mesh));
-        engine_.registry.emplace<Material>(e, model.materials[model.meshMaterial[i]]);
+        e.Add<Mesh>(mesh);
+        e.Add<BoundingBox>(GetMeshBoundingBox(mesh));
+        e.Add<Material>(model.materials[model.meshMaterial[i]]);
 
         // Apply the remaining components (e.g. Collider) to each sub-mesh entity.
         for (auto it = spec.MemberBegin(); it != spec.MemberEnd(); ++it) {

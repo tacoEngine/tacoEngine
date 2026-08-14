@@ -21,10 +21,17 @@
 #include "tr_timing.h"
 #include "comp/Camera.h"
 #include "comp/Lights.h"
-#include "comp/System.h"
 #include "misc/Debug.h"
 
 namespace taco {
+// Called from Entity::Add on every add of a System subclass, so it must stay cheap and
+// idempotent. The vector keeps first-attach order, which is the dispatch order; the set is
+// only there to make the second and later calls a no-op.
+void detail::RegisterSystem(Engine *engine, const entt::id_type type, const SystemHooks hooks) {
+    if (engine->system_types_.insert(type).second)
+        engine->system_hooks_.push_back(hooks);
+}
+
 Engine::Engine() {
 #if defined(NDEBUG)
     ChangeDirectory(GetApplicationDirectory());
@@ -67,23 +74,8 @@ void Engine::Run() {
 }
 
 void Engine::Update() {
-    auto visit_systems = [&](auto func) {
-        for (auto [id, pool] : registry.storage()) {
-            if (registry.storage(id)->type() != entt::type_id<std::shared_ptr<System>>())
-                continue;
-            auto system_view = entt::basic_view {registry.storage<std::shared_ptr<System>>(id)};
-            for (auto [entity, system] : system_view.each()) {
-                func(system, entity);
-            }
-        }
-    };
-
-    visit_systems([&](std::shared_ptr<System> system, entt::entity entity) {
-        system->UpdateEarly(this, Entity(this, &registry, entity));
-    });
-    visit_systems([&](std::shared_ptr<System> system, entt::entity entity) {
-        system->UpdatePrePhysics(this, Entity(this, &registry, entity));
-    });
+    DispatchSystems(&SystemHooks::early);
+    DispatchSystems(&SystemHooks::pre_physics);
 
     auto collider_view = registry.view<Collider, Transform>();
     auto character_view = registry.view<Character, Transform>();
@@ -118,7 +110,7 @@ void Engine::Update() {
     }
 
     for (auto [_, link, transform] : link_view.each()) {
-        auto &remote_transform = registry.get<Transform>(link.entity);
+        auto &remote_transform = link.target.Get<Transform>();
 
         if (link.linkPosX)
             transform.position.x = remote_transform.position.x;
@@ -142,12 +134,24 @@ void Engine::Update() {
             transform.velocity.z = remote_transform.velocity.z;
     }
 
-    visit_systems([&](std::shared_ptr<System> system, entt::entity entity) {
-        system->UpdatePostPhysics(this, Entity(this, &registry, entity));
-    });
-    visit_systems([&](std::shared_ptr<System> system, entt::entity entity) {
-        system->UpdateLate(this, Entity(this, &registry, entity));
-    });
+    DispatchSystems(&SystemHooks::post_physics);
+    DispatchSystems(&SystemHooks::late);
+}
+
+// Indexed rather than range-based: a hook may Add a system type that is not registered yet,
+// which appends to system_hooks_ and can reallocate it. Re-reading size() each iteration also
+// means a type registered mid-phase still runs in that phase — what the old storage scan did.
+void Engine::DispatchSystems(void (*SystemHooks::*phase)(entt::registry &, Engine *)) {
+    for (size_t i = 0; i < system_hooks_.size(); i++)
+        (system_hooks_[i].*phase)(registry, this);
+}
+
+void Engine::RunSystemPhasesForTest() {
+    DispatchSystems(&SystemHooks::early);
+    DispatchSystems(&SystemHooks::pre_physics);
+    DispatchSystems(&SystemHooks::post_physics);
+    DispatchSystems(&SystemHooks::late);
+    DispatchSystems(&SystemHooks::ui);
 }
 
 void Engine::Render() {
@@ -323,14 +327,7 @@ void Engine::Render() {
 
     DrawText((std::to_string(drawn_meshes) + "/" + std::to_string(mesh_count_)).c_str(), 0, 300, 12, WHITE);
 
-    for (auto [id, pool] : registry.storage()) {
-        if (registry.storage(id)->type() != entt::type_id<std::shared_ptr<System>>())
-            continue;
-        auto system_view = entt::basic_view {registry.storage<std::shared_ptr<System>>(id)};
-        for (auto [entity, system] : system_view.each()) {
-            system->UpdateUI(this, Entity(this, &registry, entity));
-        }
-    }
+    DispatchSystems(&SystemHooks::ui);
 
     EndDrawing();
 

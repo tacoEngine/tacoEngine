@@ -10,6 +10,7 @@
 #define POSITION_H
 
 #include "taco/misc/Rotation.h"
+#include "taco/Entity.h"
 
 namespace taco {
 struct Transform {
@@ -19,7 +20,7 @@ struct Transform {
 };
 
 struct Link {
-    entt::entity entity;
+    Entity target;
     bool linkPosX, linkPosY, linkPosZ;
     bool linkRotX, linkRotY, linkRotZ;
     bool linkVelX, linkVelY, linkVelZ;

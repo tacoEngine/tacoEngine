@@ -17,7 +17,7 @@
 #include <entt/entt.hpp>
 #include <rapidjson/document.h>
 
-#include "comp/System.h"
+#include "Entity.h"
 
 namespace taco {
 class Engine;
@@ -25,36 +25,35 @@ class Engine;
 class Loader {
 public:
     using Value = rapidjson::Value;
-    using ComponentLoader = std::function<void(Loader &, entt::entity, const Value &)>;
-    using SystemFactory = std::function<std::shared_ptr<System>(const Value &)>;
+    using ComponentLoader = std::function<void(Loader &, Entity, const Value &)>;
 
     Loader(Engine &engine, std::string asset_dir);
 
     void RegisterComponent(const std::string &name, ComponentLoader fn);
-    void RegisterSystem(const std::string &name, SystemFactory fn);
 
+    /// Register a type that takes no scene parameters — systems, mostly. The scene's value
+    /// for this key is ignored; write a RegisterComponent lambda if you need it.
     template<class T>
-    void RegisterSystem(const std::string &name) {
-        RegisterSystem(name, [](const Value &) { return std::make_shared<T>(); });
+    void Register(const std::string &name) {
+        RegisterComponent(name, [](Loader &, Entity e, const Value &) { e.Add<T>(); });
     }
 
     void LoadScene(const std::string &rel_path);
 
     Engine &engine() { return engine_; }
     std::string Path(const std::string &rel) const;
-    entt::entity Resolve(const std::string &name) const;
+    Entity Resolve(const std::string &name) const;
 
 private:
     void RegisterBuiltins();
-    void ApplyComponents(entt::entity entity, const Value &spec);
-    void AttachSystems(entt::entity entity, const Value &list);
+    void ApplyComponents(Entity entity, const Value &spec);
+    void ApplySystems(Entity entity, const Value &list);
     void ExpandModel(const Value &spec);
 
     Engine &engine_;
     std::string asset_dir_;
     std::map<std::string, ComponentLoader> components_;
-    std::map<std::string, SystemFactory> systems_;
-    std::map<std::string, entt::entity> named_;
+    std::map<std::string, Entity> named_;
 };
 }
 

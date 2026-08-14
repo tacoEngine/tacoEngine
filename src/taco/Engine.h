@@ -9,8 +9,10 @@
 #ifndef ENGINE_H
 #define ENGINE_H
 
+#include <set>
+#include <vector>
+
 #include <entt/entt.hpp>
-#include <entt/core/hashed_string.hpp>
 #include <tacoRender.h>
 
 #include "comp/Transform.h"
@@ -21,10 +23,10 @@
 #include "Physics.h"
 #include "tr_math.h"
 
-using namespace entt::literals;
-
 namespace taco {
 class Engine {
+    friend void detail::RegisterSystem(Engine *engine, entt::id_type type, SystemHooks hooks);
+
     bool running_ = false;
     int64_t delta_time_ = 0.0f;
     long long accumulator_ = 0.f;
@@ -39,6 +41,10 @@ class Engine {
 
     size_t mesh_count_ = 0;
 
+    /// One entry per system type, in first-attach order. Populated by detail::RegisterSystem.
+    std::vector<SystemHooks> system_hooks_;
+    std::set<entt::id_type> system_types_;
+
 public:
     entt::registry registry;
 
@@ -46,6 +52,10 @@ public:
 
     /// A fresh entity with no components.
     Entity Create();
+
+    /// Run all five system phases once. Exists so the dispatch table can be tested without
+    /// a frame; Run()/Update() do not use it.
+    void RunSystemPhasesForTest();
 
     void Run();
 
@@ -56,6 +66,11 @@ public:
     Config SwapConfig(Config con);
 
 private:
+    /// Dispatch one phase over every registered system type. `phase` selects which of the
+    /// five thunks to call — SystemHooks' members are function pointers, so the selector is a
+    /// pointer to a member whose type is itself a function pointer.
+    void DispatchSystems(void (*SystemHooks::*phase)(entt::registry &, Engine *));
+
     void Update();
     void Render();
     size_t DrawAllMeshes(const decltype(registry.view<const Transform, const Mesh, Material>()) &model_view,

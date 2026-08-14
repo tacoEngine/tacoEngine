@@ -45,7 +45,7 @@ int main() {
     for (const entt::entity e : engine.registry.view<taco::Link>()) {
         found_b = true;
         const taco::Link &link = engine.registry.get<taco::Link>(e);
-        const taco::Transform &t = engine.registry.get<taco::Transform>(link.entity);
+        const taco::Transform &t = link.target.Get<taco::Transform>();
         assert(t.position.x == 1 && t.position.y == 2 && t.position.z == 3);
         assert(link.linkPosX && !link.linkPosY && link.linkPosZ);
     }
