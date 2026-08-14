@@ -43,10 +43,34 @@ Engine::Engine() {
 
     SetExitKey(0);
 
-    physics_ = std::make_shared<PhysicsEngine>();
+    physics_ = std::make_unique<PhysicsEngine>();
     debug_renderer_ = std::make_unique<RaylibDebugRenderer>();
 
     ReloadGBuffers();
+
+    // A Jolt body outlives any single copy of its component; it dies with the entity.
+    registry.on_destroy<Collider>().connect<&Engine::DestroyColliderBody>(this);
+    registry.on_destroy<Character>().connect<&Engine::DestroyCharacterBody>(this);
+}
+
+// EnTT does not fire on_destroy when the registry itself is destroyed — ~basic_storage calls
+// the non-virtual shrink_to_size(0), which never publishes. So clear it here, while physics_
+// is still alive, or every body leaks.
+Engine::~Engine() {
+    registry.clear();
+}
+
+void Engine::DestroyColliderBody(entt::registry &reg, const entt::entity entity) {
+    const Collider &collider = reg.get<Collider>(entity);
+    physics_->body_interface_.RemoveBody(collider.body_id_);
+    physics_->body_interface_.DestroyBody(collider.body_id_);
+}
+
+// Only removed, not destroyed: ~JPH::Character destroys its own body when the last Ref to it
+// goes away, which is normally the component being erased right after this hook returns.
+void Engine::DestroyCharacterBody(entt::registry &reg, const entt::entity entity) {
+    const Character &character = reg.get<Character>(entity);
+    character.character_->RemoveFromPhysicsSystem();
 }
 
 void Engine::Run() {
@@ -375,8 +399,8 @@ Entity Engine::Create() {
     return Entity(this, &registry, registry.create());
 }
 
-std::shared_ptr<PhysicsEngine> Engine::GetPhysics() const {
-    return physics_;
+PhysicsEngine *Engine::GetPhysics() const {
+    return physics_.get();
 }
 
 double Engine::GetDeltaTime() const {

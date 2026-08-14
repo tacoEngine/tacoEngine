@@ -31,7 +31,7 @@ class Engine {
     int64_t delta_time_ = 0.0f;
     long long accumulator_ = 0.f;
 
-    std::shared_ptr<PhysicsEngine> physics_;
+    std::unique_ptr<PhysicsEngine> physics_;
     std::unique_ptr<RaylibDebugRenderer> debug_renderer_;
     Config config_;
     Input input_;
@@ -49,6 +49,7 @@ public:
     entt::registry registry;
 
     Engine();
+    ~Engine();
 
     /// A fresh entity with no components.
     Entity Create();
@@ -59,7 +60,7 @@ public:
 
     void Run();
 
-    std::shared_ptr<PhysicsEngine> GetPhysics() const;
+    PhysicsEngine *GetPhysics() const;
     double GetDeltaTime() const;
     Input &GetInput();
 
@@ -70,6 +71,10 @@ private:
     /// five thunks to call — SystemHooks' members are function pointers, so the selector is a
     /// pointer to a member whose type is itself a function pointer.
     void DispatchSystems(void (*SystemHooks::*phase)(entt::registry &, Engine *));
+
+    /// on_destroy hooks: the body belongs to the engine, not to the component.
+    void DestroyColliderBody(entt::registry &reg, entt::entity entity);
+    void DestroyCharacterBody(entt::registry &reg, entt::entity entity);
 
     void Update();
     void Render();

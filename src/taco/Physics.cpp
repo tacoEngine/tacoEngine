@@ -23,17 +23,10 @@
 
 #include "misc/Log.h"
 
-taco::Collider::Collider(std::shared_ptr<PhysicsEngine> physics, JPH::BodyID body_id, Vector3 com)
+taco::Collider::Collider(PhysicsEngine *physics, JPH::BodyID body_id, Vector3 com)
     : body_id_(body_id),
-      physics_(std::move(physics)),
+      physics_(physics),
       com_(com) {}
-
-taco::Collider::~Collider() {
-    if (physics_) {
-        physics_->body_interface_.RemoveBody(body_id_);
-        physics_->body_interface_.DestroyBody(body_id_);
-    }
-}
 
 void taco::Collider::SetPosition(Vector3 position) {
     JPH::RVec3 pos(position.x, position.y, position.z);
@@ -70,15 +63,9 @@ Vector3 taco::Collider::GetCenterOfMass() const {
     return com_;
 }
 
-taco::Character::Character(std::shared_ptr<PhysicsEngine> physics, std::unique_ptr<JPH::Character> character)
+taco::Character::Character(PhysicsEngine *physics, JPH::Ref<JPH::Character> character)
     : character_(std::move(character)),
-      physics_(std::move(physics)) {}
-
-taco::Character::~Character() {
-    if (physics_ && character_) {
-        physics_->body_interface_.RemoveBody(character_->GetBodyID());
-    }
-}
+      physics_(physics) {}
 
 void taco::Character::SetPosition(Vector3 position) {
     JPH::RVec3 pos(position.x, position.y, position.z);
@@ -112,6 +99,10 @@ Vector3 taco::Character::GetVelocity() const {
 
 bool taco::Character::OnGround() const {
     return character_->IsSupported();
+}
+
+size_t taco::PhysicsEngine::BodyCount() const {
+    return system_.GetNumBodies();
 }
 
 taco::PhysicsEngine::PhysicsEngine()
@@ -163,7 +154,7 @@ taco::Collider taco::PhysicsEngine::CreateSphereCollider(double radius) {
                                               Layers::MOVING);
     JPH::BodyID sphere_id = body_interface_.CreateAndAddBody(sphere_settings, JPH::EActivation::Activate);
 
-    return Collider(shared_from_this(), sphere_id, Vector3Zero());
+    return Collider(this, sphere_id, Vector3Zero());
 }
 
 taco::Collider taco::PhysicsEngine::CreateMeshCollider(Mesh mesh, bool dynamic) {
@@ -221,7 +212,7 @@ taco::Collider taco::PhysicsEngine::CreateMeshCollider(Mesh mesh, bool dynamic) 
         center_of_mass.z = com.GetZ();
     }
 
-    return Collider(shared_from_this(), mesh_id, center_of_mass);
+    return Collider(this, mesh_id, center_of_mass);
 }
 
 taco::Character taco::PhysicsEngine::CreateCharacter(double height, double radius) {
@@ -234,12 +225,12 @@ taco::Character taco::PhysicsEngine::CreateCharacter(double height, double radiu
     settings->mFriction = 0.f;
     settings->mSupportingVolume = JPH::Plane(JPH::Vec3::sAxisY(), -0.5f * radius);
     // Accept contacts that touch the lower sphere of the capsule
-    auto character = std::make_unique<JPH::Character>(settings,
-                                                      JPH::RVec3::sZero(),
-                                                      JPH::Quat::sIdentity(),
-                                                      0,
-                                                      &system_);
+    JPH::Ref<JPH::Character> character = new JPH::Character(settings,
+                                                           JPH::RVec3::sZero(),
+                                                           JPH::Quat::sIdentity(),
+                                                           0,
+                                                           &system_);
     character->AddToPhysicsSystem(JPH::EActivation::Activate);
 
-    return Character(shared_from_this(), std::move(character));
+    return Character(this, std::move(character));
 }

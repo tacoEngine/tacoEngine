@@ -13,6 +13,7 @@
 
 #include "taco/Engine.h"
 #include "taco/Entity.h"
+#include "taco/Physics.h"
 #include "taco/comp/Transform.h"
 
 namespace {
@@ -105,12 +106,49 @@ void TestSystemReceivesOwnEntity() {
 
     assert(e.Get<SelfCheckSystem>().seen == e.id());
 }
+
+void TestBodyLifetime() {
+    taco::Engine engine;
+    const size_t empty = engine.GetPhysics()->BodyCount();
+
+    taco::Entity e = engine.Create();
+    e.Add<taco::Collider>(engine.GetPhysics()->CreateSphereCollider(1.0));
+    assert(engine.GetPhysics()->BodyCount() == empty + 1);
+
+    // A copy going out of scope must not take the body with it. This is the property the old
+    // destructor-owned design could not offer, and the reason the components are copyable.
+    {
+        taco::Collider copy = e.Get<taco::Collider>();
+        (void) copy.GetPosition();
+    }
+    assert(engine.GetPhysics()->BodyCount() == empty + 1);
+    assert(e.Get<taco::Collider>().GetPosition().y == 0);
+
+    // Removing the component releases the body, via Engine's on_destroy hook.
+    e.Remove<taco::Collider>();
+    assert(engine.GetPhysics()->BodyCount() == empty);
+
+    // So does destroying the entity.
+    taco::Entity e2 = engine.Create();
+    e2.Add<taco::Collider>(engine.GetPhysics()->CreateSphereCollider(1.0));
+    assert(engine.GetPhysics()->BodyCount() == empty + 1);
+    e2.Destroy();
+    assert(engine.GetPhysics()->BodyCount() == empty);
+
+    // Characters take the same route.
+    taco::Entity c = engine.Create();
+    c.Add<taco::Character>(engine.GetPhysics()->CreateCharacter(1.8, 0.2));
+    assert(engine.GetPhysics()->BodyCount() == empty + 1);
+    c.Destroy();
+    assert(engine.GetPhysics()->BodyCount() == empty);
+}
 }
 
 int main() {
     TestEntityOperations();
     TestSystemDispatch();
     TestSystemReceivesOwnEntity();
+    TestBodyLifetime();
     std::printf("entity self-check passed\n");
     return 0;
 }

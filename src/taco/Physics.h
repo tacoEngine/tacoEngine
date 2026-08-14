@@ -110,7 +110,7 @@ public:
 class Collider;
 class Character;
 
-class PhysicsEngine : public std::enable_shared_from_this<PhysicsEngine> {
+class PhysicsEngine {
     friend class Engine;
     friend class Collider;
     friend class Character;
@@ -124,10 +124,12 @@ class PhysicsEngine : public std::enable_shared_from_this<PhysicsEngine> {
     ObjectVsBroadPhaseLayerFilterImpl object_vs_broadphase_layer_filter_;
     ObjectLayerPairFilterImpl object_vs_object_layer_filter_;
 
-    std::shared_ptr<PhysicsEngine> self_;
-
 public:
     PhysicsEngine();
+
+    /// Bodies currently in the simulation. Used to check that a destroyed entity took its
+    /// body with it.
+    size_t BodyCount() const;
 
     void SetGravity(Vector3 gravity);
 
@@ -142,16 +144,22 @@ public:
 
 class Collider {
     friend class PhysicsEngine;
+    friend class Engine;
 
     JPH::BodyID body_id_;
-    std::shared_ptr<PhysicsEngine> physics_;
+    PhysicsEngine *physics_ = nullptr;  ///< non-owning; the Engine outlives every component
     Vector3 com_;
 
-    Collider(std::shared_ptr<PhysicsEngine> physics, JPH::BodyID body_id, Vector3 com);
+    Collider(PhysicsEngine *physics, JPH::BodyID body_id, Vector3 com);
 
 public:
-    Collider(Collider&&) = default;
-    ~Collider();
+    // Copyable and destructor-free on purpose: the body's lifetime belongs to Engine's
+    // on_destroy hook, not to this handle. Copying a live Collider and keeping the copy
+    // around is not supported — see the spec's known ceilings.
+    Collider(const Collider &) = default;
+    Collider(Collider &&) = default;
+    Collider &operator=(const Collider &) = default;
+    Collider &operator=(Collider &&) = default;
 
     void SetPosition(Vector3 position);
     Vector3 GetPosition() const;
@@ -169,14 +177,19 @@ class Character {
     friend class PhysicsEngine;
     friend class Engine;
 
-    std::unique_ptr<JPH::Character> character_;
-    std::shared_ptr<PhysicsEngine> physics_;
+    /// JPH::Character is NonCopyable but refcounted, so Ref is what makes this component
+    /// copyable. The last surviving Ref frees it, and ~JPH::Character destroys the body.
+    JPH::Ref<JPH::Character> character_;
+    PhysicsEngine *physics_ = nullptr;
 
-    Character(std::shared_ptr<PhysicsEngine> physics, std::unique_ptr<JPH::Character> character);
+    Character(PhysicsEngine *physics, JPH::Ref<JPH::Character> character);
 
 public:
-    Character(Character&&) = default;
-    ~Character();
+    Character(const Character &) = default;
+    Character(Character &&) = default;
+    Character &operator=(const Character &) = default;
+    Character &operator=(Character &&) = default;
+
     bool OnGround() const;
 
     void SetPosition(Vector3 position);
