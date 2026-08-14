@@ -1,0 +1,1 @@
+{ "entities": {  "a": { "Transform": {"position":[1,2,3]},           "Mesh": {"generate":"cube","size":[1,1,1]} },  "b": { "Transform": {},           "Link": {"target":"a","pos":[true,false,true]} }} }

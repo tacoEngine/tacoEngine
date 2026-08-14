@@ -45,6 +45,7 @@ set(TACO_SOURCES
 add_library(tacoEngine ${TACO_SOURCES})
 
 target_link_libraries(tacoEngine EnTT::EnTT tacoRender yal Jolt)
+target_compile_options(tacoEngine PUBLIC -fno-rtti)
 target_include_directories(tacoEngine PUBLIC src)
 # rapidjson is exposed by the public Loader.h header, so consumers need it too.
 target_include_directories(tacoEngine PUBLIC ext/rapidjson/include)

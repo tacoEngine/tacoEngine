@@ -11,6 +11,7 @@ submodules. For the renderer internals see **[docs/tacoRender.md](docs/tacoRende
 ```
 src/taco/
   Engine.{h,cpp}      # main loop, deferred render orchestration, system dispatch
+  Entity.h            # the entity handle: destroy/add/get/remove
   Physics.{h,cpp}     # Jolt wrapper: PhysicsEngine, Collider, Character, layers
   Config.h            # render/quality settings struct (hot-swappable)
   Graphics.h          # just re-exports <tacoRender.h>
@@ -18,7 +19,7 @@ src/taco/
     Transform.h       # Transform{position, rotation, velocity}, Link
     Camera.h          # Camera{fov}
     Lights.{h,cpp}    # Sunlight, Environment (IBL), Sky
-    System.h          # System base class — the behaviour/"script" component
+    System.{h,cpp}    # the behaviour component; five phase hooks, added like any component
   misc/
     Rotation.{h,cpp}  # euler-angle rotation with cached quaternion
     Debug.{h,cpp}     # RaylibDebugRenderer: Jolt debug draw -> raylib
@@ -33,12 +34,19 @@ rapidjson (linked at top level but unused by the core lib), tacoRender (→ rayl
 
 ## Core model
 
-Everything is an **entity** in the public `Engine::registry`. You attach:
+Everything is an **entity**. Create one with `Engine::Create()`, which returns a
+`taco::Entity` (`Entity.h`) — a cheap, copyable handle (`Valid`, `Destroy`, `Add<T>`,
+`Get<T>`, `Has<T>`, `Remove<T>`, `id`, `engine`) you can store in a component. You attach:
 - data components (`Transform`, `Camera`, `Mesh`, `Material`, `BoundingBox`, `Sunlight`,
-  `Environment`, `Sky`, `Collider`, `Character`, `Link`), and
-- behaviour via a **`std::shared_ptr<System>`** component. `System` (comp/System.h) has
-  five virtual phase hooks; subclass it and store the shared_ptr on an entity. See
-  `game/src/*System.*` for real subclasses (Movement, Look, Aim, ThirdPerson, …).
+  `Environment`, `Sky`, `Collider`, `Character`, `Link`) with `entity.Add<T>(args...)`, and
+- behaviour as a subclass of **`taco::System`** (comp/System.h) with five virtual phase
+  hooks. A system is stored **by value** like any other component; `Entity::Add` detects the
+  `System` base class and registers the type's dispatch automatically, so consumer code
+  never calls `RegisterSystem` itself. See `game/src/*System.*` for real subclasses (Movement,
+  Look, Aim, ThirdPerson, …).
+
+`Engine::registry_` is **private** — consumers never touch it. Iterate entities with
+`Engine::Each<Ts...>(fn)`, where `fn` is `(Entity, Ts &...)`.
 
 `Mesh`/`Material`/`BoundingBox`/`Camera3D` etc. are **raylib** types used directly.
 `Rotation` is stored as **euler radians** (subclass of `Vector3`) and lazily caches a
@@ -52,8 +60,9 @@ Note: `accumulator_` is a dead field; `delta_time_` is int64 nanoseconds.
 
 ### `Update()` — fixed order
 
-1. Systems `UpdateEarly` → `UpdatePrePhysics` (dispatched over every entity holding a
-   `shared_ptr<System>`; see `visit_systems` — it scans all storages for that type).
+1. Systems `UpdateEarly` → `UpdatePrePhysics` (dispatched over `Engine::system_hooks_`, an
+   ordered table of five function pointers per registered system type, called in
+   first-attach order; each hook iterates that system type's storage).
 2. **ECS → physics:** push each `Collider`/`Character` entity's transform
    (position, rotation-as-quaternion, velocity) into the Jolt body.
 3. `physics_->Update(dt)`.
@@ -94,9 +103,9 @@ drawn as an on-screen overlay with FPS and drawn/total mesh counts. On window re
 
 ## Physics (Jolt wrapper, `Physics.{h,cpp}`)
 
-`PhysicsEngine` (a `shared_from_this` object; Colliders/Characters hold a shared_ptr back
-to it for RAII cleanup) owns the `JPH::PhysicsSystem`, a 10 MB temp allocator, and a thread
-pool (`hardware_concurrency - 1`). Two layers only: `NON_MOVING` / `MOVING` (standard Jolt
+`PhysicsEngine` (owned by `Engine` via `unique_ptr`; Colliders/Characters hold a non-owning
+`PhysicsEngine *` back to it) owns the `JPH::PhysicsSystem`, a 10 MB temp allocator, and a
+thread pool (`hardware_concurrency - 1`). Two layers only: `NON_MOVING` / `MOVING` (standard Jolt
 hello-world filter setup). `Update(dt)` runs `ceil((1/60)/dt)` collision substeps. Jolt
 `Trace`/`Assert` are routed to the yal logger (`misc/Log.cpp`).
 
@@ -104,9 +113,12 @@ hello-world filter setup). `Update(dt)` runs `ceil((1/60)/dt)` collision substep
 - `CreateMeshCollider(mesh, dynamic=true)` — indexed mesh → `MeshShape` from vertex+index
   lists; non-indexed → `TriangleList`. Static bodies go on `NON_MOVING`.
 - `CreateCharacter(height, radius)` — capsule `JPH::Character`, 45° max slope.
-- `Collider` / `Character` are **RAII move-only handles** around a Jolt body; the destructor
-  removes+destroys the body. Get/Set position, rotation (quaternion), velocity;
-  `Character::OnGround()` = `IsSupported()`.
+- `Collider` / `Character` are **copyable value types with no destructor**, each holding a
+  non-owning `PhysicsEngine *` (`Character` also holds a `JPH::Ref<JPH::Character>`). The Jolt
+  body is freed by `Engine`'s `on_destroy` hooks when the component is removed or the entity
+  destroyed — **not** by the handle; `~Engine` calls `registry_.clear()` first because EnTT
+  does not fire `on_destroy` during registry destruction. Get/Set position, rotation
+  (quaternion), velocity; `Character::OnGround()` = `IsSupported()`.
 
 ## Gotchas worth remembering
 
@@ -117,3 +129,9 @@ hello-world filter setup). `Update(dt)` runs `ceil((1/60)/dt)` collision substep
 - `Rotation` is euler radians with a cached quaternion; `SetFromQuaternion` writes euler and
   lets the cache lazily recompute.
 - `accumulator_` is unused; `delta_time_`'s `0.0f` initialiser is cosmetic (it's int64 ns).
+- Adding or destroying a component of the type currently being iterated (e.g. inside a system
+  phase or an `Each` loop over that type) is UB.
+- A stale `Entity` is normally caught by `Valid()` (entt tags each id with a version, so a
+  recycled index fails validation) — **but** the version is a fixed-width counter (12 bits in
+  the default 32-bit entt entity); recycle the same index enough times that it wraps and the
+  stale handle silently names the new occupant.
