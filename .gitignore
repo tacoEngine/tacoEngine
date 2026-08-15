@@ -83,6 +83,7 @@ Temporary Items
 # iCloud generated files
 *.icloud
 
-game/
 .idea/
+.claude/
+game/
 graphify-out/
