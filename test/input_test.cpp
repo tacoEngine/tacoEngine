@@ -12,7 +12,7 @@
 #include <cassert>
 #include <cstdio>
 
-#include "taco/input/Input.h"
+#include "taco/Input.h"
 
 class ReplayInput : public taco::Input {
 public:

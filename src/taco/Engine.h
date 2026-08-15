@@ -22,7 +22,7 @@
 #include "comp/Transform.h"
 #include "Config.h"
 #include "Entity.h"
-#include "input/Input.h"
+#include "Input.h"
 #include "misc/Debug.h"
 #include "Physics.h"
 #include "tr_math.h"

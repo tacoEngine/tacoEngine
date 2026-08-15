@@ -3,17 +3,19 @@
 A small C++20 game engine: **EnTT** (ECS) + **Jolt** (physics) + **tacoRender**
 (deferred PBR renderer, a C library wrapping raylib). Author: Nikolas Wipper. MPL-2.0.
 
-The engine itself is ~1000 lines in `src/taco`. Everything heavy lives in `ext/`
+The engine itself is ~2500 lines in `src/taco`. Everything heavy lives in `ext/`
 submodules. For the renderer internals see **[docs/tacoRender.md](docs/tacoRender.md)**.
 
 ## Layout
 
 ```
-src/taco/
+src/taco/             # flat on purpose: everything here is public API
   Engine.{h,cpp}      # main loop, deferred render orchestration, system dispatch
-  Entity.h            # the entity handle: destroy/add/get/remove
+  Entity.{h,cpp}      # the entity handle: destroy/add/get/remove
   Physics.{h,cpp}     # Jolt wrapper: PhysicsEngine, Collider, Character, layers
   Checkpoint.{h,cpp}  # the snapshot itself: capture/restore of its own ECS + Jolt data
+  Loader.{h,cpp}      # json scene loading; exposes rapidjson in its header
+  Input.{h,cpp}       # named-key registry over raylib input; subclassable for replay
   Config.h            # render/quality settings struct (hot-swappable)
   Graphics.h          # just re-exports <tacoRender.h>
   comp/               # ECS components (plain structs unless noted)
@@ -21,17 +23,24 @@ src/taco/
     Camera.h          # Camera{fov}
     Lights.{h,cpp}    # Sunlight, Environment (IBL), Sky
     System.{h,cpp}    # the behaviour component; five phase hooks, added like any component
-  misc/
+  misc/               # internal plumbing + small value types
     Rotation.{h,cpp}  # euler-angle rotation with cached quaternion
     Debug.{h,cpp}     # RaylibDebugRenderer: Jolt debug draw -> raylib
     Log.{h,cpp}       # routes Jolt Trace/Assert into yal logger
+test/                 # one <unit>_test.cpp per unit, plain <cassert>, no framework
 game/                 # a consumer app (not part of the library); adds `..` as subdir
+docs/                 # tacoRender.md + superpowers specs/plans
 ```
 
 **Build:** CMake, `-fno-rtti`, C++20. `tacoEngine` links `EnTT`, `tacoRender`,
 `yal` (logging, `#include <log/log.h>` → `logging::Logger`), `Jolt`. `src` is a public
 include dir, so downstream uses `#include "taco/..."`. Submodules: entt, JoltPhysics,
-rapidjson (linked at top level but unused by the core lib), tacoRender (→ raylib), yal.
+rapidjson (public — `Loader.h` exposes it, so `ext/rapidjson/include` is a public include
+dir too), tacoRender (→ raylib), yal.
+
+Each `test/<unit>_test.cpp` is its own `main()` built as its own executable
+(`taco<Unit>Test`, declared in one `foreach` in CMakeLists.txt) and asserts its way to a
+"passed" line. A test that writes a scratch file cleans it up before returning.
 
 ## Core model
 

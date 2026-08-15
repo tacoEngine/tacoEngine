@@ -49,6 +49,8 @@ int main() {
     });
     assert(found_b);
 
+    std::remove("loader_test_scene.json");
+
     std::printf("loader self-check passed\n");
     return 0;
 }

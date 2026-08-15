@@ -41,8 +41,8 @@ set(TACO_SOURCES
         src/taco/Physics.h
         src/taco/misc/Rotation.cpp
         src/taco/misc/Rotation.h
-        src/taco/input/Input.cpp
-        src/taco/input/Input.h
+        src/taco/Input.cpp
+        src/taco/Input.h
 )
 
 add_library(tacoEngine ${TACO_SOURCES})
@@ -53,14 +53,8 @@ target_include_directories(tacoEngine PUBLIC src)
 # rapidjson is exposed by the public Loader.h header, so consumers need it too.
 target_include_directories(tacoEngine PUBLIC ext/rapidjson/include)
 
-add_executable(tacoLoaderTest src/taco/loader_test.cpp)
-target_link_libraries(tacoLoaderTest tacoEngine)
-
-add_executable(tacoInputTest src/taco/input/input_test.cpp)
-target_link_libraries(tacoInputTest tacoEngine)
-
-add_executable(tacoCheckpointTest src/taco/checkpoint_test.cpp)
-target_link_libraries(tacoCheckpointTest tacoEngine)
-
-add_executable(tacoEntityTest src/taco/entity_test.cpp)
-target_link_libraries(tacoEntityTest tacoEngine)
+foreach (test Loader Input Checkpoint Entity)
+    string(TOLOWER ${test} test_file)
+    add_executable(taco${test}Test test/${test_file}_test.cpp)
+    target_link_libraries(taco${test}Test tacoEngine)
+endforeach ()
