@@ -10,7 +10,10 @@
 #define ENTITY_H
 
 #include <concepts>
+#include <functional>
+#include <map>
 #include <utility>
+#include <vector>
 
 #include <entt/entt.hpp>
 
@@ -19,9 +22,8 @@
 namespace taco {
 class Engine;
 
-/// Five stateless thunks, one per update phase. Each iterates one system type's storage and
-/// calls that phase on every instance. Captureless lambdas, so they convert to plain function
-/// pointers and SystemHooks stays trivially copyable.
+/// Five thunks, one per phase, each running that phase over one system type's storage.
+/// Captureless lambdas, so they decay to function pointers and SystemHooks stays trivial.
 struct SystemHooks {
     void (*early)(entt::registry &, Engine *);
     void (*pre_physics)(entt::registry &, Engine *);
@@ -31,29 +33,37 @@ struct SystemHooks {
 };
 
 namespace detail {
-/// Defined in Engine.cpp. Idempotent: a type already registered is ignored, so calling it on
-/// every Add costs one set lookup.
-void RegisterSystem(Engine *engine, entt::id_type type, SystemHooks hooks);
+
+/// Copies one component type out of the registry, returns the closure that puts it back.
+/// Returning a closure instead of filling a Checkpoint keeps Checkpoint.h — and Jolt — out
+/// of this header.
+using CaptureFn = std::function<void(entt::registry &)> (*)(const entt::registry &);
+
+
+/// Idempotent: a type already registered is ignored.
+void RegisterSystem(Engine *engine, SystemHooks hooks);
+/// Idempotent, first registration wins: Engine's hand-written captures and Ignore<T>() hold.
+void TrackComponent(Engine *engine, entt::id_type type, CaptureFn capture);
 
 template<class T>
-SystemHooks MakeHooks();
+CaptureFn MakeCapture();
 }
 
-/// Handle to one entity: an id plus the registry it lives in. Cheap to copy and safe to store
-/// in a component. A default-constructed Entity is null and fails Valid().
-/// Engine is only ever passed through, never dereferenced, so this header needs no more than
-/// its forward declaration — which is what lets every member be defined inline.
 class Entity {
+    friend class Engine;
+
     Engine *engine_ = nullptr;
     entt::registry *registry_ = nullptr;
     entt::entity entity_ = entt::null;
 
-public:
-    Entity() = default;
+    template<class T>
+    static SystemHooks MakeHooks();
 
-    /// Public because the system thunks in MakeHooks<T> build handles too.
     Entity(Engine *engine, entt::registry *registry, entt::entity entity)
         : engine_(engine), registry_(registry), entity_(entity) {}
+
+public:
+    Entity() = default;
 
     entt::entity id() const { return entity_; }
     Engine *engine() const { return engine_; }
@@ -65,15 +75,20 @@ public:
 
     template<class T, class... Args>
     T &Add(Args &&...args) {
-        // Dependent on T, so it is only instantiated for the types actually added.
         if constexpr (std::derived_from<T, System>)
-            detail::RegisterSystem(engine_, entt::type_id<T>().hash(), detail::MakeHooks<T>());
+            detail::RegisterSystem(engine_, MakeHooks<T>());
+
+        // Move-only can't be captured by value, so it isn't checkpointed at all.
+        if constexpr (std::copy_constructible<T>)
+            detail::TrackComponent(engine_, entt::type_id<T>().hash(), detail::MakeCapture<T>());
 
         return registry_->emplace<T>(entity_, std::forward<Args>(args)...);
     }
 
     template<class T>
-    T &Get() const { return registry_->get<T>(entity_); }
+    T &Get() const {
+        return registry_->get<T>(entity_);
+    }
 
     template<class T>
     bool Has() const { return registry_->all_of<T>(entity_); }
@@ -86,9 +101,29 @@ public:
     }
 };
 
-/// Below Entity because the thunks construct handles.
 template<class T>
-SystemHooks detail::MakeHooks() {
+detail::CaptureFn detail::MakeCapture() {
+    return [](const entt::registry &registry) -> std::function<void(entt::registry &)> {
+        std::map<entt::entity, T> data;
+        for (auto [entity, component] : registry.view<const T>().each())
+            data.emplace(entity, component);
+
+        return [data = std::move(data)](entt::registry &reg) {
+            // Gained since the capture: drop it, don't just overwrite.
+            std::vector<entt::entity> stale;
+            for (const entt::entity entity : reg.view<T>())
+                if (!data.count(entity)) stale.push_back(entity);
+            for (const entt::entity entity : stale) reg.remove<T>(entity);
+
+            // An entity that couldn't be revived stays destroyed.
+            for (const auto &[entity, component] : data)
+                if (reg.valid(entity)) reg.emplace_or_replace<T>(entity, component);
+        };
+    };
+}
+
+template<class T>
+SystemHooks Entity::MakeHooks() {
     return {
         [](entt::registry &reg, Engine *engine) {
             for (auto [entity, system] : reg.view<T>().each())

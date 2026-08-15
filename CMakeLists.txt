@@ -27,9 +27,12 @@ set(TACO_SOURCES
         src/taco/misc/Debug.h
         src/taco/misc/Log.cpp
         src/taco/misc/Log.h
+        src/taco/Checkpoint.cpp
+        src/taco/Checkpoint.h
         src/taco/Config.h
         src/taco/Engine.cpp
         src/taco/Engine.h
+        src/taco/Entity.cpp
         src/taco/Entity.h
         src/taco/Graphics.h
         src/taco/Loader.cpp
@@ -55,6 +58,9 @@ target_link_libraries(tacoLoaderTest tacoEngine)
 
 add_executable(tacoInputTest src/taco/input/input_test.cpp)
 target_link_libraries(tacoInputTest tacoEngine)
+
+add_executable(tacoCheckpointTest src/taco/checkpoint_test.cpp)
+target_link_libraries(tacoCheckpointTest tacoEngine)
 
 add_executable(tacoEntityTest src/taco/entity_test.cpp)
 target_link_libraries(tacoEntityTest tacoEngine)

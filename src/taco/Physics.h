@@ -111,6 +111,7 @@ class Collider;
 class Character;
 
 class PhysicsEngine {
+    friend class Checkpoint;
     friend class Engine;
     friend class Collider;
     friend class Character;
@@ -174,6 +175,7 @@ public:
 };
 
 class Character {
+    friend class Checkpoint;
     friend class PhysicsEngine;
     friend class Engine;
 

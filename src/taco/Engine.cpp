@@ -12,6 +12,7 @@
 #include <memory>
 #include <ratio>
 
+#include <log/log.h>
 #include <raylib.h>
 #include <raymath.h>
 #include <tr_effects.h>
@@ -24,14 +25,6 @@
 #include "misc/Debug.h"
 
 namespace taco {
-// Called from Entity::Add on every add of a System subclass, so it must stay cheap and
-// idempotent. The vector keeps first-attach order, which is the dispatch order; the set is
-// only there to make the second and later calls a no-op.
-void detail::RegisterSystem(Engine *engine, const entt::id_type type, const SystemHooks hooks) {
-    if (engine->system_types_.insert(type).second)
-        engine->system_hooks_.push_back(hooks);
-}
-
 Engine::Engine() {
 #if defined(NDEBUG)
     ChangeDirectory(GetApplicationDirectory());
@@ -48,29 +41,153 @@ Engine::Engine() {
 
     ReloadGBuffers();
 
-    // A Jolt body outlives any single copy of its component; it dies with the entity.
     registry_.on_destroy<Collider>().connect<&Engine::DestroyColliderBody>(this);
     registry_.on_destroy<Character>().connect<&Engine::DestroyCharacterBody>(this);
+
+    // Sunlight's shadowMap has heap arrays that cannot be trivially deep-copied
+    TrackSunlight();
+
+    // entt::entity is the entity list itself; the two physics types ride Jolt's state stream.
+    Ignore<entt::entity>();
+    Ignore<Collider>();
+    Ignore<Character>();
 }
 
-// EnTT does not fire on_destroy when the registry itself is destroyed — ~basic_storage calls
-// the non-virtual shrink_to_size(0), which never publishes. So clear it here, while physics_
-// is still alive, or every body leaks.
 Engine::~Engine() {
     registry_.clear();
+    ClearRetired();
 }
 
 void Engine::DestroyColliderBody(entt::registry &reg, const entt::entity entity) {
     const Collider &collider = reg.get<Collider>(entity);
     physics_->body_interface_.RemoveBody(collider.body_id_);
-    physics_->body_interface_.DestroyBody(collider.body_id_);
+
+    // Don't destroy the collider when there's a checkpoint, so it can be restored
+    if (checkpointed_)
+        retired_colliders_.emplace(entity, collider);
+    else
+        physics_->body_interface_.DestroyBody(collider.body_id_);
 }
 
-// Only removed, not destroyed: ~JPH::Character destroys its own body when the last Ref to it
-// goes away, which is normally the component being erased right after this hook returns.
 void Engine::DestroyCharacterBody(entt::registry &reg, const entt::entity entity) {
     const Character &character = reg.get<Character>(entity);
     character.character_->RemoveFromPhysicsSystem();
+
+    // Don't destroy the character when there's a checkpoint, so it can be restored
+    if (checkpointed_)
+        retired_characters_.emplace(entity, character);
+}
+
+void Engine::TrackSunlight() {
+    struct TrackedSunlight {
+        float intensity;
+        Color color;
+        bool shadow_casting;
+    };
+
+    tracked_[entt::type_id<Sunlight>().hash()] =
+            [](const entt::registry &registry) -> std::function<void(entt::registry &)> {
+                std::map<entt::entity, TrackedSunlight> data;
+                for (auto [entity, sun] : registry.view<const Sunlight>().each())
+                    data.emplace(entity,
+                                 TrackedSunlight {
+                                     .intensity = sun.intensity,
+                                     .color = sun.color,
+                                     .shadow_casting = sun.shadow_casting
+                                 });
+
+                return [data = std::move(data)](entt::registry &registry) {
+                    for (const auto &[entity, values] : data) {
+                        if (!registry.valid(entity)) continue;
+                        // Patched in place, never replaced: shadow_map_ is a live GPU allocation,
+                        // not state, so it outlives every restore. A sun revived with the entity
+                        // starts at {0} and Render allocates one, exactly like a fresh Add.
+                        Sunlight &sun = registry.get_or_emplace<Sunlight>(entity);
+                        sun.intensity = values.intensity;
+                        sun.color = values.color;
+                        sun.shadow_casting = values.shadow_casting;
+                    }
+                };
+            };
+}
+
+// A Collider is a bare id and needs DestroyBody; a Character frees its body when the last Ref
+// to it goes, which is the clear() below.
+void Engine::ClearRetired() {
+    for (auto &[entity, collider] : retired_colliders_)
+        physics_->body_interface_.DestroyBody(collider.body_id_);
+    retired_colliders_.clear();
+
+    retired_characters_.clear();
+}
+
+// Between RestoreECS and RestorePhysics: a revived body has to be in the broad phase before the
+// stream replays, a leftover has to be gone.
+void Engine::HandBackRetired(const Checkpoint &cp) {
+    // Attached since the capture, so the stream would leave it running. Remove parks it via
+    // on_destroy, the loops below destroy it. Collected first — removing mid-iteration is UB.
+    std::vector<entt::entity> added;
+    for (const entt::entity entity : registry_.view<Collider>())
+        if (!cp.colliders_.contains(entity))
+            added.push_back(entity);
+    for (const entt::entity entity : added)
+        registry_.remove<Collider>(entity);
+
+    added.clear();
+    for (const entt::entity entity : registry_.view<Character>())
+        if (!cp.characters_.contains(entity))
+            added.push_back(entity);
+    for (const entt::entity entity : added)
+        registry_.remove<Character>(entity);
+
+    for (auto &[entity, collider] : retired_colliders_) {
+        if (cp.colliders_.count(entity) && registry_.valid(entity) && !registry_.all_of<Collider>(entity)) {
+            // RestoreState sets whether the body is awake, so it goes back in deactivated.
+            physics_->body_interface_.AddBody(collider.body_id_, JPH::EActivation::DontActivate);
+            registry_.emplace<Collider>(entity, collider);
+        } else {
+            physics_->body_interface_.DestroyBody(collider.body_id_);
+        }
+    }
+    retired_colliders_.clear();
+
+    // No else branch: a leftover is destroyed by the clear() below dropping the last Ref.
+    for (auto &[entity, character] : retired_characters_) {
+        if (cp.characters_.contains(entity) && registry_.valid(entity) && !registry_.all_of<Character>(entity)) {
+            character.character_->AddToPhysicsSystem(JPH::EActivation::DontActivate);
+            registry_.emplace<Character>(entity, character);
+        }
+    }
+    retired_characters_.clear();
+}
+
+Checkpoint Engine::Save() {
+    checkpointed_ = true;
+
+    Checkpoint cp;
+    for (auto &[_, capture] : tracked_)
+        cp.restore_.push_back(capture(registry_));
+    cp.CaptureECS(registry_);
+    cp.CapturePhysics(*physics_, registry_);
+
+    return cp;
+}
+
+void Engine::Restore(Checkpoint &cp) {
+    cp.RestoreECS(registry_);
+    HandBackRetired(cp);
+    cp.RestorePhysics(*physics_, registry_);
+}
+
+void Engine::RequestRestore(Checkpoint &cp) {
+    pending_restore_ = &cp;
+}
+
+void Engine::ApplyPendingRestore() {
+    if (Checkpoint *pending = pending_restore_) {
+        pending_restore_ = nullptr;
+        Restore(*pending);
+    }
 }
 
 void Engine::Run() {
@@ -94,6 +211,8 @@ void Engine::Run() {
         input_.UpdateFromLocalInput();
 
         Update();
+
+        ApplyPendingRestore();
     }
 }
 
@@ -162,12 +281,9 @@ void Engine::Update() {
     DispatchSystems(&SystemHooks::late);
 }
 
-// Indexed rather than range-based: a hook may Add a system type that is not registered yet,
-// which appends to system_hooks_ and can reallocate it. Re-reading size() each iteration also
-// means a type registered mid-phase still runs in that phase — what the old storage scan did.
 void Engine::DispatchSystems(void (*SystemHooks::*phase)(entt::registry &, Engine *)) {
-    for (size_t i = 0; i < system_hooks_.size(); i++)
-        (system_hooks_[i].*phase)(registry_, this);
+    for (auto &system_hook : system_hooks_)
+        (system_hook.*phase)(registry_, this);
 }
 
 void Engine::RunSystemPhasesForTest() {
@@ -333,8 +449,8 @@ void Engine::Render() {
     DrawText("FPS", 0, 150 + 12 * 8, 12, WHITE);
     DrawText("Unacc", 0, 150 + 12 * 9, 12, WHITE);
 
-    float total_time = std::accumulate(timings.begin(), timings.end(), 0.0);
-    float fps = 1000.0 / total_time;
+    float total_time = std::accumulate(timings.begin(), timings.end(), 0.0f);
+    float fps = 1000.0f / total_time;
     float real_time = GetFrameTime();
 
     DrawText(std::to_string(timings[0]).c_str(), 70, 150 + 12 * 0, 12, WHITE);
@@ -347,7 +463,7 @@ void Engine::Render() {
     DrawText(std::to_string(total_time).c_str(), 70, 150 + 12 * 7, 12, WHITE);
     DrawText(std::to_string(fps).c_str(), 70, 150 + 12 * 8, 12, WHITE);
     if (total_time < real_time)
-    DrawText(std::to_string(real_time - total_time).c_str(), 70, 150 + 12 * 9, 12, WHITE);
+        DrawText(std::to_string(real_time - total_time).c_str(), 70, 150 + 12 * 9, 12, WHITE);
 
     DrawText((std::to_string(drawn_meshes) + "/" + std::to_string(mesh_count_)).c_str(), 0, 300, 12, WHITE);
 
